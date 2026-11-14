@@ -15,9 +15,27 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col p-3 sm:p-6">
 
-    <div id="app" class="w-full flex-1 flex flex-col items-center justify-center"></div>
+    <div id="app" class="w-full flex-1 flex flex-col items-center justify-center">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl w-full max-w-md text-center">
+            <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">LazuWrite</h1>
+            <p class="text-slate-400 text-sm mt-2">Initializing workspace...</p>
+        </div>
+    </div>
 
     <script>
+        // Global Error Boundary to prevent silent blue screen crashes
+        window.onerror = function(msg, url, line) {
+            document.getElementById('app').innerHTML = `
+                <div class="bg-red-950 border border-red-800 rounded-2xl p-6 text-red-200 max-w-lg w-full">
+                    <h2 class="font-bold text-lg mb-2">Runtime Error Caught</h2>
+                    <p class="text-xs font-mono bg-black/40 p-2 rounded">${msg}</p>
+                    <p class="text-xs mt-3 text-red-300">Line: ${line}</p>
+                    <button onclick="localStorage.clear(); sessionStorage.clear(); location.reload();" class="mt-4 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold px-4 py-2 rounded-lg">Clear Storage & Restart</button>
+                </div>
+            `;
+            return true;
+        };
+
         // Supabase Configuration
         const SUPABASE_URL = 'https://ulmwwuvvioihhosyfflp.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_pM7zmfoy7UHnwAY6Wii7mQ_zBBObH-V';
@@ -33,12 +51,22 @@
 
         let state = {
             currentUser: null,
-            users: JSON.parse(localStorage.getItem('lazu_users') || '[]'),
-            tasks: JSON.parse(localStorage.getItem('lazu_tasks') || '[]'),
+            users: [],
+            tasks: [],
             authTab: 'login',
             currentMonth: new Date().getMonth(),
             currentYear: new Date().getFullYear()
         };
+
+        try {
+            const storedUsers = localStorage.getItem('lazu_users');
+            if (storedUsers) state.users = JSON.parse(storedUsers);
+            const storedTasks = localStorage.getItem('lazu_tasks');
+            if (storedTasks) state.tasks = JSON.parse(storedTasks);
+        } catch (e) {
+            console.error('Storage parse error, resetting:', e);
+            localStorage.clear();
+        }
 
         const ROLES = [
             'Social Media Manager',
@@ -53,11 +81,41 @@
         const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
         function init() {
-            const saved = sessionStorage.getItem('lazu_session');
-            if (saved) {
-                try {
+            try {
+                const saved = sessionStorage.getItem('lazu_session');
+                if (saved) {
                     state.currentUser = JSON.parse(saved);
-                } catch (e) {
-                    sessionStorage.removeItem('lazu_session');
                 }
+            } catch (e) {
+                sessionStorage.removeItem('lazu_session');
             }
+
+            // Render UI immediately
+            render();
+
+            // Background fetch from Supabase
+            if (supabaseClient) {
+                fetchAppData();
+                setupRealtimeSync();
+            }
+
+            setInterval(render, 60000);
+        }
+
+        async function fetchAppData() {
+            if (!supabaseClient) return;
+            try {
+                const { data, error } = await supabaseClient
+                    .from('app_state')
+                    .select('*')
+                    .eq('id', 1)
+                    .single();
+
+                if (data && data.payload) {
+                    state.users = (data.payload.users || []).map(u => ({
+                        ...u,
+                        roles: u.roles || [u.role || 'Caption Writer']
+                    }));
+                    state.tasks = data.payload.tasks || [];
+                    
+                    localStorage.setItem('lazu_users', JSON
