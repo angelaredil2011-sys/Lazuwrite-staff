@@ -13,11 +13,15 @@
         body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-center p-4">
 
     <!-- App Container -->
-    <div id="app" class="flex-1 flex flex-col items-center justify-center p-4">
-        <div class="text-slate-400 text-sm animate-pulse">Loading LazuWrite...</div>
+    <div id="app" class="w-full max-w-md flex flex-col items-center justify-center">
+        <!-- Default fallback render so screen is never blank -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl w-full text-center">
+            <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">LazuWrite</h1>
+            <p class="text-slate-400 text-sm mt-2">Loading application...</p>
+        </div>
     </div>
 
     <script>
@@ -29,7 +33,7 @@
         try {
             supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         } catch (e) {
-            console.error('Failed to initialize Supabase client:', e);
+            console.error('Supabase init error:', e);
         }
 
         // State Management
@@ -38,7 +42,7 @@
             users: [],
             tasks: [],
             notifications: [],
-            authTab: 'login' // 'login' or 'register'
+            authTab: 'login'
         };
 
         const ROLES = [
@@ -51,25 +55,28 @@
             'Text Formatter'
         ];
 
-        // Initialize App
+        // Immediate Render to prevent blank screen, then sync data in background
         async function initApp() {
             try {
                 const savedUser = sessionStorage.getItem('lazuwrite_user');
                 if (savedUser) {
                     state.currentUser = JSON.parse(savedUser);
                 }
+            } catch (e) {
+                console.error('Session error:', e);
+            }
 
+            // Render UI immediately so screen is never stuck
+            render();
+
+            // Fetch data in background
+            if (supabaseClient) {
                 await fetchAppData();
                 setupRealtimeSync();
-            } catch (err) {
-                console.error('Initialization error:', err);
-            } finally {
-                render();
             }
         }
 
         async function fetchAppData() {
-            if (!supabaseClient) return;
             try {
                 const { data, error } = await supabaseClient
                     .from('app_state')
@@ -81,6 +88,7 @@
                     state.users = data.payload.users || [];
                     state.tasks = data.payload.tasks || [];
                     state.notifications = data.payload.notifications || [];
+                    render(); // Re-render once data arrives
                 } else {
                     await saveAppData();
                 }
@@ -97,10 +105,7 @@
                     tasks: state.tasks,
                     notifications: state.notifications
                 };
-
-                await supabaseClient
-                    .from('app_state')
-                    .upsert({ id: 1, payload: payload });
+                await supabaseClient.from('app_state').upsert({ id: 1, payload: payload });
             } catch (err) {
                 console.error('Save error:', err);
             }
@@ -121,7 +126,7 @@
                     })
                     .subscribe();
             } catch (err) {
-                console.error('Realtime setup error:', err);
+                console.error('Realtime error:', err);
             }
         }
 
@@ -130,8 +135,6 @@
             e.preventDefault();
             const username = document.getElementById('login-username').value.trim();
             const password = document.getElementById('login-password').value;
-
-            await fetchAppData();
 
             const user = state.users.find(u => u.username.toLowerCase() === username.toLowerCase());
 
@@ -154,8 +157,6 @@
             e.preventDefault();
             const username = document.getElementById('reg-username').value.trim();
             const password = document.getElementById('reg-password').value;
-
-            await fetchAppData();
 
             const existingUser = state.users.find(u => u.username.toLowerCase() === username.toLowerCase());
             if (existingUser) {
@@ -195,8 +196,10 @@
             const app = document.getElementById('app');
             if (!state.currentUser) {
                 app.innerHTML = renderAuthScreen();
+                document.body.className = "bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-center p-4";
             } else {
                 app.innerHTML = renderDashboard();
+                document.body.className = "bg-slate-950 text-slate-100 min-h-screen flex flex-col";
             }
         }
 
@@ -204,7 +207,7 @@
             const isLogin = state.authTab === 'login';
 
             return `
-                <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl w-full">
                     <div class="text-center mb-6">
                         <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">LazuWrite</h1>
                         <p class="text-slate-400 text-sm mt-2">Team Coordination & Workflow Hub</p>
@@ -248,55 +251,53 @@
             const isSMM = state.currentUser.role === 'Social Media Manager';
 
             return `
-                <div class="w-full flex-1 flex flex-col">
-                    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center w-full">
-                        <div class="flex items-center space-x-4">
-                            <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">LazuWrite</h1>
-                            <span class="text-xs bg-blue-950 text-blue-400 border border-blue-800 px-3 py-1 rounded-full font-medium">${state.currentUser.role}</span>
-                        </div>
-                        <div class="flex items-center space-x-4">
-                            <span class="text-sm text-slate-300">Hello, <b>${state.currentUser.username}</b></span>
-                            <button onclick="handleLogout()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm px-4 py-2 rounded-lg transition">Sign Out</button>
-                        </div>
-                    </header>
+                <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center w-full">
+                    <div class="flex items-center space-x-4">
+                        <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">LazuWrite</h1>
+                        <span class="text-xs bg-blue-950 text-blue-400 border border-blue-800 px-3 py-1 rounded-full font-medium">${state.currentUser.role}</span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span class="text-sm text-slate-300">Hello, <b>${state.currentUser.username}</b></span>
+                        <button onclick="handleLogout()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm px-4 py-2 rounded-lg transition">Sign Out</button>
+                    </div>
+                </header>
 
-                    <main class="flex-1 p-6 max-w-7xl mx-auto w-full grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div class="md:col-span-2 space-y-6">
+                <main class="flex-1 p-6 max-w-7xl mx-auto w-full grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="md:col-span-2 space-y-6">
+                        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
+                            <h2 class="text-lg font-bold text-slate-200 mb-4">Team Workflow & Content Board</h2>
+                            <p class="text-sm text-slate-400">Welcome to your collaborative workspace. Live updates sync automatically across all connected team members.</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-6">
+                        ${isSMM ? `
                             <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-                                <h2 class="text-lg font-bold text-slate-200 mb-4">Team Workflow & Content Board</h2>
-                                <p class="text-sm text-slate-400">Welcome to your collaborative workspace. Live updates sync automatically across all connected team members.</p>
-                            </div>
-                        </div>
-
-                        <div class="space-y-6">
-                            ${isSMM ? `
-                                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-                                    <h2 class="text-lg font-bold text-slate-200 mb-4">Team Members Roster</h2>
-                                    <div class="space-y-3">
-                                        ${state.users.map(u => `
-                                            <div class="bg-slate-950 border border-slate-800 p-3 rounded-xl flex justify-between items-center">
-                                                <div>
-                                                    <p class="font-semibold text-slate-200 text-sm">${u.username}</p>
-                                                    <p class="text-xs text-blue-400">${u.role}</p>
-                                                </div>
-                                                ${u.username !== state.currentUser.username ? `
-                                                    <select onchange="updateUserRole(${u.id}, this.value)" class="bg-slate-900 border border-slate-800 text-xs text-slate-300 rounded p-1">
-                                                        ${ROLES.map(r => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${r}</option>`).join('')}
-                                                    </select>
-                                                ` : ''}
+                                <h2 class="text-lg font-bold text-slate-200 mb-4">Team Members Roster</h2>
+                                <div class="space-y-3">
+                                    ${state.users.map(u => `
+                                        <div class="bg-slate-950 border border-slate-800 p-3 rounded-xl flex justify-between items-center">
+                                            <div>
+                                                <p class="font-semibold text-slate-200 text-sm">${u.username}</p>
+                                                <p class="text-xs text-blue-400">${u.role}</p>
                                             </div>
-                                        `).join('')}
-                                    </div>
+                                            ${u.username !== state.currentUser.username ? `
+                                                <select onchange="updateUserRole(${u.id}, this.value)" class="bg-slate-900 border border-slate-800 text-xs text-slate-300 rounded p-1">
+                                                    ${ROLES.map(r => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${r}</option>`).join('')}
+                                                </select>
+                                            ` : ''}
+                                        </div>
+                                    `).join('')}
                                 </div>
-                            ` : `
-                                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl text-center">
-                                    <h2 class="text-lg font-bold text-slate-200 mb-2">Workspace Access</h2>
-                                    <p class="text-xs text-slate-400">Member directory and role administration are restricted to the Social Media Manager.</p>
-                                </div>
-                            `}
-                        </div>
-                    </main>
-                </div>
+                            </div>
+                        ` : `
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl text-center">
+                                <h2 class="text-lg font-bold text-slate-200 mb-2">Workspace Access</h2>
+                                <p class="text-xs text-slate-400">Member directory and role administration are restricted to the Social Media Manager.</p>
+                            </div>
+                        `}
+                    </div>
+                </main>
             `;
         }
 
@@ -309,7 +310,7 @@
             }
         }
 
-        // Run App
+        // Run App Instantly
         initApp();
     </script>
 </body>
