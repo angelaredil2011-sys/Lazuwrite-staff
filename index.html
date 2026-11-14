@@ -6,6 +6,8 @@
     <title>LazuWrite - Team Coordination & Calendar</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JavaScript SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
@@ -16,10 +18,21 @@
     <div id="app" class="w-full flex-1 flex flex-col items-center justify-center"></div>
 
     <script>
+        // Supabase Configuration
+        const SUPABASE_URL = 'https://ulmwwuvvioihhosyfflp.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_pM7zmfoy7UHnwAY6Wii7mQ_zBBObH-V';
+        let supabaseClient = null;
+
+        try {
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } catch (e) {
+            console.error('Supabase init error:', e);
+        }
+
         let state = {
             currentUser: null,
-            users: JSON.parse(localStorage.getItem('lazu_users') || '[]'),
-            tasks: JSON.parse(localStorage.getItem('lazu_tasks') || '[]'),
+            users: [],
+            tasks: [],
             authTab: 'login',
             currentMonth: new Date().getMonth(),
             currentYear: new Date().getFullYear()
@@ -37,25 +50,93 @@
 
         const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-        function init() {
+        async function init() {
             const saved = sessionStorage.getItem('lazu_session');
             if (saved) {
                 state.currentUser = JSON.parse(saved);
-                // Sync latest user profile state if updated by SMM
-                const upToDateUser = state.users.find(u => u.username === state.currentUser.username);
-                if (upToDateUser) {
-                    state.currentUser = upToDateUser;
-                    sessionStorage.setItem('lazu_session', JSON.stringify(upToDateUser));
-                }
             }
+
+            await fetchAppData();
+            setupRealtimeSync();
             render();
             setInterval(render, 60000); 
         }
 
-        function handleLogin(e) {
+        async function fetchAppData() {
+            if (!supabaseClient) return;
+            try {
+                const { data, error } = await supabaseClient
+                    .from('app_state')
+                    .select('*')
+                    .eq('id', 1)
+                    .single();
+
+                if (data && data.payload) {
+                    state.users = data.payload.users || [];
+                    state.tasks = data.payload.tasks || [];
+                    
+                    // Keep current user session updated with database role changes
+                    if (state.currentUser) {
+                        const upToDateUser = state.users.find(u => u.username === state.currentUser.username);
+                        if (upToDateUser) {
+                            state.currentUser = upToDateUser;
+                            sessionStorage.setItem('lazu_session', JSON.stringify(upToDateUser));
+                        }
+                    }
+                    render();
+                } else {
+                    await saveAppData();
+                }
+            } catch (err) {
+                console.error('Fetch error:', err);
+            }
+        }
+
+        async function saveAppData() {
+            if (!supabaseClient) return;
+            try {
+                const payload = {
+                    users: state.users,
+                    tasks: state.tasks
+                };
+                await supabaseClient.from('app_state').upsert({ id: 1, payload: payload });
+            } catch (err) {
+                console.error('Save error:', err);
+            }
+        }
+
+        function setupRealtimeSync() {
+            if (!supabaseClient) return;
+            try {
+                supabaseClient
+                    .channel('public:app_state')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, payload => {
+                        if (payload.new && payload.new.payload) {
+                            state.users = payload.new.payload.users || [];
+                            state.tasks = payload.new.payload.tasks || [];
+                            
+                            if (state.currentUser) {
+                                const upToDateUser = state.users.find(u => u.username === state.currentUser.username);
+                                if (upToDateUser) {
+                                    state.currentUser = upToDateUser;
+                                    sessionStorage.setItem('lazu_session', JSON.stringify(upToDateUser));
+                                }
+                            }
+                            render();
+                        }
+                    })
+                    .subscribe();
+            } catch (err) {
+                console.error('Realtime error:', err);
+            }
+        }
+
+        async function handleLogin(e) {
             e.preventDefault();
             const username = document.getElementById('login-username').value.trim();
             const password = document.getElementById('login-password').value;
+
+            await fetchAppData();
 
             const user = state.users.find(u => u.username.toLowerCase() === username.toLowerCase());
             if (!user) {
@@ -72,10 +153,12 @@
             render();
         }
 
-        function handleRegister(e) {
+        async function handleRegister(e) {
             e.preventDefault();
             const username = document.getElementById('reg-username').value.trim();
             const password = document.getElementById('reg-password').value;
+
+            await fetchAppData();
 
             if (state.users.some(u => u.username.toLowerCase() === username.toLowerCase())) {
                 alert('Username already exists!');
@@ -91,7 +174,7 @@
             };
 
             state.users.push(newUser);
-            localStorage.setItem('lazu_users', JSON.stringify(state.users));
+            await saveAppData();
 
             state.currentUser = newUser;
             sessionStorage.setItem('lazu_session', JSON.stringify(newUser));
@@ -109,7 +192,7 @@
             render();
         }
 
-        function handleAddTask(e) {
+        async function handleAddTask(e) {
             e.preventDefault();
             const title = document.getElementById('task-title').value.trim();
             const assignee = document.getElementById('task-assignee').value;
@@ -126,21 +209,20 @@
             };
 
             state.tasks.push(newTask);
-            localStorage.setItem('lazu_tasks', JSON.stringify(state.tasks));
+            await saveAppData();
             render();
         }
 
-        function updateTaskStatus(taskId, status) {
+        async function updateTaskStatus(taskId, status) {
             const task = state.tasks.find(t => t.id === taskId);
             if (task) {
                 task.status = status;
-                localStorage.setItem('lazu_tasks', JSON.stringify(state.tasks));
+                await saveAppData();
                 render();
             }
         }
 
-        function updateUserRole(userId, newRole) {
-            // Strict security check: Only SMM can update roles
+        async function updateUserRole(userId, newRole) {
             if (state.currentUser.role !== 'Social Media Manager') {
                 alert('Permission denied: Only the Social Media Manager can change roles.');
                 return;
@@ -149,13 +231,7 @@
             const user = state.users.find(u => u.id === userId);
             if (user) {
                 user.role = newRole;
-                localStorage.setItem('lazu_users', JSON.stringify(state.users));
-                
-                // If SMM updated themselves, update active session
-                if (user.username === state.currentUser.username) {
-                    state.currentUser = user;
-                    sessionStorage.setItem('lazu_session', JSON.stringify(user));
-                }
+                await saveAppData();
                 render();
             }
         }
