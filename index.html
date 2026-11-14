@@ -4,9 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LazuWrite - Team Coordination & Calendar</title>
+    <!-- Supabase JavaScript SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        body { background-color: #030712; color: #f3f4f6; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px; }
+        body { background-color: #030712; color: #f3f4f6; min-h-screen; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px; }
         .card { background-color: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 24px; width: 100%; max-width: 380px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
         h1 { font-size: 24px; font-weight: bold; text-align: center; background: linear-gradient(to right, #60a5fa, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 4px; }
         p.subtitle { text-align: center; color: #9ca3af; font-size: 12px; margin-bottom: 20px; }
@@ -44,6 +46,19 @@
     <div id="app"></div>
 
     <script>
+        // Supabase Configuration
+        const SUPABASE_URL = 'https://ulmwwuvvioihhosyfflp.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_pM7zmfoy7UHnwAY6Wii7mQ_zBBObH-V';
+        let supabaseClient = null;
+
+        try {
+            if (window.supabase) {
+                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            }
+        } catch (e) {
+            console.error('Supabase init error:', e);
+        }
+
         let state = {
             currentUser: null,
             users: JSON.parse(localStorage.getItem('lazu_users') || '[]'),
@@ -65,21 +80,111 @@
 
         const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-        function init() {
+        async function init() {
             try {
                 const saved = sessionStorage.getItem('lazu_session');
                 if (saved) state.currentUser = JSON.parse(saved);
             } catch (e) {
                 sessionStorage.removeItem('lazu_session');
             }
+
             render();
-            setInterval(render, 60000); // Live countdown refresh every minute
+
+            if (supabaseClient) {
+                await fetchAppData();
+                setupRealtimeSync();
+            }
+
+            setInterval(render, 60000);
         }
 
-        function handleLogin(e) {
+        async function fetchAppData() {
+            if (!supabaseClient) return;
+            try {
+                const { data, error } = await supabaseClient
+                    .from('app_state')
+                    .select('*')
+                    .eq('id', 1)
+                    .single();
+
+                if (data && data.payload) {
+                    state.users = (data.payload.users || []).map(u => ({
+                        ...u,
+                        roles: u.roles || [u.role || 'Caption Writer']
+                    }));
+                    state.tasks = data.payload.tasks || [];
+                    
+                    localStorage.setItem('lazu_users', JSON.stringify(state.users));
+                    localStorage.setItem('lazu_tasks', JSON.stringify(state.tasks));
+
+                    if (state.currentUser) {
+                        const upToDateUser = state.users.find(u => u.username === state.currentUser.username);
+                        if (upToDateUser) {
+                            state.currentUser = upToDateUser;
+                            sessionStorage.setItem('lazu_session', JSON.stringify(upToDateUser));
+                        }
+                    }
+                    render();
+                }
+            } catch (err) {
+                console.error('Background fetch notice:', err);
+            }
+        }
+
+        async function saveAppData() {
+            localStorage.setItem('lazu_users', JSON.stringify(state.users));
+            localStorage.setItem('lazu_tasks', JSON.stringify(state.tasks));
+
+            if (!supabaseClient) return;
+            try {
+                const payload = {
+                    users: state.users,
+                    tasks: state.tasks
+                };
+                await supabaseClient.from('app_state').upsert({ id: 1, payload: payload });
+            } catch (err) {
+                console.error('Supabase save error:', err);
+            }
+        }
+
+        function setupRealtimeSync() {
+            if (!supabaseClient) return;
+            try {
+                supabaseClient
+                    .channel('public:app_state')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, payload => {
+                        if (payload.new && payload.new.payload) {
+                            state.users = (payload.new.payload.users || []).map(u => ({
+                                ...u,
+                                roles: u.roles || [u.role || 'Caption Writer']
+                            }));
+                            state.tasks = payload.new.payload.tasks || [];
+                            
+                            localStorage.setItem('lazu_users', JSON.stringify(state.users));
+                            localStorage.setItem('lazu_tasks', JSON.stringify(state.tasks));
+
+                            if (state.currentUser) {
+                                const upToDateUser = state.users.find(u => u.username === state.currentUser.username);
+                                if (upToDateUser) {
+                                    state.currentUser = upToDateUser;
+                                    sessionStorage.setItem('lazu_session', JSON.stringify(upToDateUser));
+                                }
+                            }
+                            render();
+                        }
+                    })
+                    .subscribe();
+            } catch (err) {
+                console.error('Realtime error:', err);
+            }
+        }
+
+        async function handleLogin(e) {
             e.preventDefault();
             const username = document.getElementById('login-username').value.trim();
             const password = document.getElementById('login-password').value;
+
+            if (supabaseClient) await fetchAppData();
 
             const user = state.users.find(u => u.username.toLowerCase() === username.toLowerCase());
             if (!user) { alert('Username not found! Please register first.'); return; }
@@ -90,10 +195,12 @@
             render();
         }
 
-        function handleRegister(e) {
+        async function handleRegister(e) {
             e.preventDefault();
             const username = document.getElementById('reg-username').value.trim();
             const password = document.getElementById('reg-password').value;
+
+            if (supabaseClient) await fetchAppData();
 
             if (state.users.some(u => u.username.toLowerCase() === username.toLowerCase())) {
                 alert('Username already exists!'); return;
@@ -109,8 +216,8 @@
 
             state.users.push(newUser);
             state.currentUser = newUser;
-            localStorage.setItem('lazu_users', JSON.stringify(state.users));
             sessionStorage.setItem('lazu_session', JSON.stringify(newUser));
+            await saveAppData();
             render();
         }
 
@@ -125,7 +232,7 @@
             render();
         }
 
-        function handleAddTask(e) {
+        async function handleAddTask(e) {
             e.preventDefault();
             const title = document.getElementById('task-title').value.trim();
             const assignee = document.getElementById('task-assignee').value;
@@ -134,20 +241,20 @@
             if (!title || !deadline) return;
 
             state.tasks.push({ id: Date.now(), title, assignee, deadline, status: 'Pending' });
-            localStorage.setItem('lazu_tasks', JSON.stringify(state.tasks));
+            await saveAppData();
             render();
         }
 
-        function updateTaskStatus(taskId, status) {
+        async function updateTaskStatus(taskId, status) {
             const task = state.tasks.find(t => t.id === taskId);
             if (task) {
                 task.status = status;
-                localStorage.setItem('lazu_tasks', JSON.stringify(state.tasks));
+                await saveAppData();
                 render();
             }
         }
 
-        function addUserRole(userId, newRole) {
+        async function addUserRole(userId, newRole) {
             if (!state.currentUser.roles.includes('Social Media Manager')) {
                 alert('Permission denied: Only the Social Media Manager can assign roles.'); return;
             }
@@ -157,12 +264,12 @@
                 if (user.roles.length >= 2) { alert('Maximum limit reached: A member can have at most 2 roles.'); return; }
                 if (user.roles.includes(newRole)) { alert('This member already has this role.'); return; }
                 user.roles.push(newRole);
-                localStorage.setItem('lazu_users', JSON.stringify(state.users));
+                await saveAppData();
                 render();
             }
         }
 
-        function removeUserRole(userId, roleToRemove) {
+        async function removeUserRole(userId, roleToRemove) {
             if (!state.currentUser.roles.includes('Social Media Manager')) {
                 alert('Permission denied: Only the Social Media Manager can modify roles.'); return;
             }
@@ -170,7 +277,7 @@
             if (user && user.roles) {
                 if (user.roles.length <= 1) { alert('Members must retain at least 1 role.'); return; }
                 user.roles = user.roles.filter(r => r !== roleToRemove);
-                localStorage.setItem('lazu_users', JSON.stringify(state.users));
+                await saveAppData();
                 render();
             }
         }
