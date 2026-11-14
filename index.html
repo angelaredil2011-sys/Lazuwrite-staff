@@ -12,7 +12,7 @@
         
         /* Auth Card */
         .auth-container { width: 100%; min-height: 90vh; display: flex; align-items: center; justify-content: center; }
-        .card { background-color: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 20px sm:padding: 28px; width: 100%; max-width: 380px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+        .card { background-color: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 24px; width: 100%; max-width: 380px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
         h1 { font-size: 24px; font-weight: bold; text-align: center; background: linear-gradient(to right, #60a5fa, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 4px; }
         p.subtitle { text-align: center; color: #9ca3af; font-size: 12px; margin-bottom: 20px; }
         .tabs { display: flex; background: #030712; padding: 4px; border-radius: 10px; border: 1px solid #1f2937; margin-bottom: 18px; }
@@ -25,13 +25,12 @@
         button.submit-btn { width: 100%; background: #2563eb; color: #ffffff; font-weight: 600; padding: 11px; border: none; border-radius: 8px; cursor: pointer; margin-top: 4px; font-size: 13px; }
         button.submit-btn:hover { background: #1d4ed8; }
 
-        /* Dashboard Layout (Responsive for Phone, Tablet, PC) */
+        /* Dashboard Layout */
         .dashboard { width: 100%; max-width: 1300px; flex: 1; display: flex; flex-direction: column; margin: 0 auto; }
         header { background: #111827; border: 1px solid #1f2937; padding: 14px 18px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
         .logout-btn { background: #1f2937; color: #d1d5db; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 11px; }
         .logout-btn:hover { background: #374151; }
         
-        /* Grid system: 1 col on mobile, 3 cols on tablet/PC (2 for left tasks/calendar, 1 for roster) */
         .grid { display: grid; grid-template-columns: 1fr; gap: 16px; width: 100%; }
         @media(min-width: 900px) { .grid { grid-template-columns: 2fr 1fr; } }
 
@@ -45,6 +44,11 @@
         .badge-red { background: #450a0a; color: #f87171; border: 1px solid #7f1d1d; padding: 2px 6px; border-radius: 99px; font-size: 9px; font-weight: 600; }
         .badge-amber { background: #451a03; color: #fbbf24; border: 1px solid #78350f; padding: 2px 6px; border-radius: 99px; font-size: 9px; font-weight: 600; }
         .badge-blue { background: #172554; color: #93c5fd; border: 1px solid #1e40af; padding: 2px 6px; border-radius: 99px; font-size: 9px; font-weight: 600; }
+
+        /* Action buttons for task editing/deleting */
+        .action-btn { background: #1f2937; color: #9ca3af; border: none; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer; font-weight: 600; }
+        .action-btn:hover { background: #374151; color: #fff; }
+        .action-btn.del:hover { background: #7f1d1d; color: #fca5a5; }
 
         /* Calendar grid scaling */
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; }
@@ -77,7 +81,8 @@
             tasks: JSON.parse(localStorage.getItem('lazu_tasks') || '[]'),
             authTab: 'login',
             currentMonth: new Date().getMonth(),
-            currentYear: new Date().getFullYear()
+            currentYear: new Date().getFullYear(),
+            editingTaskId: null
         };
 
         const ROLES = [
@@ -235,6 +240,7 @@
 
         function handleLogout() {
             state.currentUser = null;
+            state.editingTaskId = null;
             sessionStorage.removeItem('lazu_session');
             render();
         }
@@ -244,7 +250,7 @@
             render();
         }
 
-        async function handleAddTask(e) {
+        async function handleTaskSubmit(e) {
             e.preventDefault();
             const title = document.getElementById('task-title').value.trim();
             const assignee = document.getElementById('task-assignee').value;
@@ -252,7 +258,57 @@
 
             if (!title || !deadline) return;
 
-            state.tasks.push({ id: Date.now(), title, assignee, deadline, status: 'Pending' });
+            if (state.editingTaskId) {
+                // Edit mode requires password qw confirmation
+                const pin = prompt('Enter confirmation password (qw) to edit this schedule:');
+                if (pin === null) return; // Cancelled
+                if (pin !== 'qw') {
+                    alert('Incorrect password! Edit canceled.');
+                    return;
+                }
+
+                const task = state.tasks.find(t => t.id === state.editingTaskId);
+                if (task) {
+                    task.title = title;
+                    task.assignee = assignee;
+                    task.deadline = deadline;
+                }
+                state.editingTaskId = null;
+            } else {
+                // Create new task
+                state.tasks.push({ id: Date.now(), title, assignee, deadline, status: 'Pending' });
+            }
+
+            await saveAppData();
+            render();
+        }
+
+        function startEditTask(taskId) {
+            const pin = prompt('Enter confirmation password (qw) to edit this schedule:');
+            if (pin === null) return;
+            if (pin !== 'qw') {
+                alert('Incorrect password!');
+                return;
+            }
+            state.editingTaskId = taskId;
+            render();
+        }
+
+        function cancelEdit() {
+            state.editingTaskId = null;
+            render();
+        }
+
+        async function deleteTask(taskId) {
+            const pin = prompt('Enter confirmation password (qw) to delete this schedule:');
+            if (pin === null) return;
+            if (pin !== 'qw') {
+                alert('Incorrect password! Deletion canceled.');
+                return;
+            }
+
+            state.tasks = state.tasks.filter(t => t.id !== taskId);
+            if (state.editingTaskId === taskId) state.editingTaskId = null;
             await saveAppData();
             render();
         }
@@ -384,6 +440,8 @@
                 `;
             } else {
                 const isSMM = state.currentUser.roles && state.currentUser.roles.includes('Social Media Manager');
+                const editingTask = state.editingTaskId ? state.tasks.find(t => t.id === state.editingTaskId) : null;
+
                 app.className = "dashboard";
                 app.innerHTML = `
                     <header>
@@ -398,18 +456,21 @@
                     </header>
                     <main class="grid">
                         <div style="display:flex; flex-direction:column; gap:16px;">
-                            <!-- Task Assignment Form -->
-                            <div class="panel">
-                                <h2>Assign Task & Set Deadline</h2>
-                                <form onsubmit="handleAddTask(event)" style="display:flex; flex-direction:column; gap:8px;">
-                                    <input type="text" id="task-title" required placeholder="Task description (e.g. Publish Promo PubMat)">
-                                    <div style="display:grid; grid-template-columns: 1fr; sm:grid-template-columns:1fr 1fr; gap:8px;">
+                            <!-- Task Assignment / Edit Form -->
+                            <div class="panel" style="${editingTask ? 'border-color: #2563eb;' : ''}">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                                    <h2 style="margin:0;">${editingTask ? 'Edit Task Schedule' : 'Assign Task & Set Deadline'}</h2>
+                                    ${editingTask ? `<button onclick="cancelEdit()" class="logout-btn" style="background:#7f1d1d; color:#fca5a5;">Cancel Edit</button>` : ''}
+                                </div>
+                                <form onsubmit="handleTaskSubmit(event)" style="display:flex; flex-direction:column; gap:8px;">
+                                    <input type="text" id="task-title" required value="${editingTask ? editingTask.title : ''}" placeholder="Task description (e.g. Publish Promo PubMat)">
+                                    <div style="display:grid; grid-template-columns: 1fr; gap:8px;">
                                         <select id="task-assignee">
-                                            ${state.users.map(u => `<option value="${u.username}">${u.username} (${(u.roles || []).join(', ')})</option>`).join('')}
+                                            ${state.users.map(u => `<option value="${u.username}" ${editingTask && editingTask.assignee === u.username ? 'selected' : ''}>${u.username} (${(u.roles || []).join(', ')})</option>`).join('')}
                                         </select>
-                                        <input type="datetime-local" id="task-deadline" required>
+                                        <input type="datetime-local" id="task-deadline" required value="${editingTask ? editingTask.deadline : ''}">
                                     </div>
-                                    <button type="submit" class="submit-btn">Publish & Assign Task</button>
+                                    <button type="submit" class="submit-btn" style="${editingTask ? 'background:#059669;' : ''}">${editingTask ? 'Save Changes (Requires qw)' : 'Publish & Assign Task'}</button>
                                 </form>
                             </div>
 
@@ -427,11 +488,15 @@
                                                 </div>
                                                 <span style="font-size:10px; color:#9ca3af;">Assigned to: <b style="color:#60a5fa">${t.assignee}</b> &bull; Due: ${new Date(t.deadline).toLocaleString()}</span>
                                             </div>
-                                            <select onchange="updateTaskStatus(${t.id}, this.value)" style="width:auto; padding:5px; font-size:11px;">
-                                                <option value="Pending" ${t.status === 'Pending' ? 'selected' : ''}>Pending</option>
-                                                <option value="In Progress" ${t.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
-                                                <option value="Completed" ${t.status === 'Completed' ? 'selected' : ''}>Completed</option>
-                                            </select>
+                                            <div style="display:flex; align-items:center; gap:6px;">
+                                                <select onchange="updateTaskStatus(${t.id}, this.value)" style="width:auto; padding:5px; font-size:11px;">
+                                                    <option value="Pending" ${t.status === 'Pending' ? 'selected' : ''}>Pending</option>
+                                                    <option value="In Progress" ${t.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                                                    <option value="Completed" ${t.status === 'Completed' ? 'selected' : ''}>Completed</option>
+                                                </select>
+                                                <button onclick="startEditTask(${t.id})" class="action-btn">Edit</button>
+                                                <button onclick="deleteTask(${t.id})" class="action-btn del">Delete</button>
+                                            </div>
                                         </div>
                                     `).join('')}
                                 </div>
