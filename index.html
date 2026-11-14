@@ -6,42 +6,19 @@
     <title>LazuWrite - Team Coordination</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Supabase JS SDK v2 -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-center p-4">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-center p-3 sm:p-6">
 
-    <!-- App Container -->
-    <div id="app" class="w-full max-w-md flex flex-col items-center justify-center">
-        <!-- Default fallback render so screen is never blank -->
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl w-full text-center">
-            <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">LazuWrite</h1>
-            <p class="text-slate-400 text-sm mt-2">Loading application...</p>
-        </div>
-    </div>
+    <div id="app" class="w-full max-w-md flex flex-col items-center justify-center"></div>
 
     <script>
-        // Supabase Configuration
-        const SUPABASE_URL = 'https://ulmwwuvvioihhosyfflp.supabase.co';
-        const SUPABASE_ANON_KEY = 'sb_publishable_pM7zmfoy7UHnwAY6Wii7mQ_zBBObH-V';
-        
-        let supabaseClient = null;
-        try {
-            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        } catch (e) {
-            console.error('Supabase init error:', e);
-        }
-
-        // State Management
         let state = {
             currentUser: null,
-            users: [],
-            tasks: [],
-            notifications: [],
+            users: JSON.parse(localStorage.getItem('lazu_users') || '[]'),
             authTab: 'login'
         };
 
@@ -55,263 +32,162 @@
             'Text Formatter'
         ];
 
-        // Immediate Render to prevent blank screen, then sync data in background
-        async function initApp() {
-            try {
-                const savedUser = sessionStorage.getItem('lazuwrite_user');
-                if (savedUser) {
-                    state.currentUser = JSON.parse(savedUser);
-                }
-            } catch (e) {
-                console.error('Session error:', e);
-            }
-
-            // Render UI immediately so screen is never stuck
+        function init() {
+            const saved = sessionStorage.getItem('lazu_session');
+            if (saved) state.currentUser = JSON.parse(saved);
             render();
-
-            // Fetch data in background
-            if (supabaseClient) {
-                await fetchAppData();
-                setupRealtimeSync();
-            }
         }
 
-        async function fetchAppData() {
-            try {
-                const { data, error } = await supabaseClient
-                    .from('app_state')
-                    .select('*')
-                    .eq('id', 1)
-                    .single();
-
-                if (data && data.payload) {
-                    state.users = data.payload.users || [];
-                    state.tasks = data.payload.tasks || [];
-                    state.notifications = data.payload.notifications || [];
-                    render(); // Re-render once data arrives
-                } else {
-                    await saveAppData();
-                }
-            } catch (err) {
-                console.error('Fetch error:', err);
-            }
-        }
-
-        async function saveAppData() {
-            if (!supabaseClient) return;
-            try {
-                const payload = {
-                    users: state.users,
-                    tasks: state.tasks,
-                    notifications: state.notifications
-                };
-                await supabaseClient.from('app_state').upsert({ id: 1, payload: payload });
-            } catch (err) {
-                console.error('Save error:', err);
-            }
-        }
-
-        function setupRealtimeSync() {
-            if (!supabaseClient) return;
-            try {
-                supabaseClient
-                    .channel('public:app_state')
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, payload => {
-                        if (payload.new && payload.new.payload) {
-                            state.users = payload.new.payload.users || [];
-                            state.tasks = payload.new.payload.tasks || [];
-                            state.notifications = payload.new.payload.notifications || [];
-                            render();
-                        }
-                    })
-                    .subscribe();
-            } catch (err) {
-                console.error('Realtime error:', err);
-            }
-        }
-
-        // Authentication Handlers
-        async function handleLogin(e) {
+        function handleLogin(e) {
             e.preventDefault();
             const username = document.getElementById('login-username').value.trim();
             const password = document.getElementById('login-password').value;
 
             const user = state.users.find(u => u.username.toLowerCase() === username.toLowerCase());
-
             if (!user) {
-                alert('Username not found! Please check your spelling or register a new account.');
+                alert('Username not found! Please register first.');
                 return;
             }
-
             if (user.password !== password) {
-                alert('Incorrect password! Please try again.');
+                alert('Incorrect password!');
                 return;
             }
 
             state.currentUser = user;
-            sessionStorage.setItem('lazuwrite_user', JSON.stringify(user));
+            sessionStorage.setItem('lazu_session', JSON.stringify(user));
             render();
         }
 
-        async function handleRegister(e) {
+        function handleRegister(e) {
             e.preventDefault();
             const username = document.getElementById('reg-username').value.trim();
             const password = document.getElementById('reg-password').value;
 
-            const existingUser = state.users.find(u => u.username.toLowerCase() === username.toLowerCase());
-            if (existingUser) {
-                alert('Username already exists! Please switch to Sign In.');
+            if (state.users.some(u => u.username.toLowerCase() === username.toLowerCase())) {
+                alert('Username already exists!');
                 return;
             }
 
-            const isFirstUser = state.users.length === 0;
+            const isFirst = state.users.length === 0;
             const newUser = {
                 id: Date.now(),
-                username: username,
-                password: password,
-                role: isFirstUser ? 'Social Media Manager' : 'Caption Writer'
+                username,
+                password,
+                role: isFirst ? 'Social Media Manager' : 'Caption Writer'
             };
 
             state.users.push(newUser);
-            await saveAppData();
+            localStorage.setItem('lazu_users', JSON.stringify(state.users));
 
             state.currentUser = newUser;
-            sessionStorage.setItem('lazuwrite_user', JSON.stringify(newUser));
+            sessionStorage.setItem('lazu_session', JSON.stringify(newUser));
             render();
         }
 
         function handleLogout() {
             state.currentUser = null;
-            sessionStorage.removeItem('lazuwrite_user');
+            sessionStorage.removeItem('lazu_session');
             render();
         }
 
-        function switchAuthTab(tab) {
+        function switchTab(tab) {
             state.authTab = tab;
             render();
         }
 
-        // Render Engine
         function render() {
             const app = document.getElementById('app');
             if (!state.currentUser) {
-                app.innerHTML = renderAuthScreen();
-                document.body.className = "bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-center p-4";
-            } else {
-                app.innerHTML = renderDashboard();
-                document.body.className = "bg-slate-950 text-slate-100 min-h-screen flex flex-col";
-            }
-        }
-
-        function renderAuthScreen() {
-            const isLogin = state.authTab === 'login';
-
-            return `
-                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl w-full">
-                    <div class="text-center mb-6">
-                        <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">LazuWrite</h1>
-                        <p class="text-slate-400 text-sm mt-2">Team Coordination & Workflow Hub</p>
-                    </div>
-
-                    <div class="flex bg-slate-950 p-1 rounded-xl mb-6 border border-slate-800">
-                        <button onclick="switchAuthTab('login')" class="flex-1 py-2 text-sm font-semibold rounded-lg transition ${isLogin ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}">Sign In</button>
-                        <button onclick="switchAuthTab('register')" class="flex-1 py-2 text-sm font-semibold rounded-lg transition ${!isLogin ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}">Register</button>
-                    </div>
-
-                    ${isLogin ? `
-                        <form onsubmit="handleLogin(event)" class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Username</label>
-                                <input type="text" id="login-username" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-slate-100 focus:outline-none focus:border-blue-500" placeholder="Enter your username">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Password</label>
-                                <input type="password" id="login-password" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-slate-100 focus:outline-none focus:border-blue-500" placeholder="Enter your password">
-                            </div>
-                            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg transition duration-200 shadow-lg shadow-blue-600/20">Sign In</button>
-                        </form>
-                    ` : `
-                        <form onsubmit="handleRegister(event)" class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Choose Username</label>
-                                <input type="text" id="reg-username" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-slate-100 focus:outline-none focus:border-blue-500" placeholder="Choose a username">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Create Password</label>
-                                <input type="password" id="reg-password" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-slate-100 focus:outline-none focus:border-blue-500" placeholder="Create a password">
-                            </div>
-                            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-lg transition duration-200 shadow-lg shadow-indigo-600/20">Create Account</button>
-                        </form>
-                    `}
-                </div>
-            `;
-        }
-
-        function renderDashboard() {
-            const isSMM = state.currentUser.role === 'Social Media Manager';
-
-            return `
-                <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex justify-between items-center w-full">
-                    <div class="flex items-center space-x-4">
-                        <h1 class="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">LazuWrite</h1>
-                        <span class="text-xs bg-blue-950 text-blue-400 border border-blue-800 px-3 py-1 rounded-full font-medium">${state.currentUser.role}</span>
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <span class="text-sm text-slate-300">Hello, <b>${state.currentUser.username}</b></span>
-                        <button onclick="handleLogout()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm px-4 py-2 rounded-lg transition">Sign Out</button>
-                    </div>
-                </header>
-
-                <main class="flex-1 p-6 max-w-7xl mx-auto w-full grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="md:col-span-2 space-y-6">
-                        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-                            <h2 class="text-lg font-bold text-slate-200 mb-4">Team Workflow & Content Board</h2>
-                            <p class="text-sm text-slate-400">Welcome to your collaborative workspace. Live updates sync automatically across all connected team members.</p>
+                const isLogin = state.authTab === 'login';
+                app.className = "w-full max-w-sm sm:max-w-md flex flex-col items-center justify-center";
+                app.innerHTML = `
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl w-full">
+                        <div class="text-center mb-6">
+                            <h1 class="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">LazuWrite</h1>
+                            <p class="text-slate-400 text-xs sm:text-sm mt-1">Team Coordination & Workflow Hub</p>
                         </div>
-                    </div>
-
-                    <div class="space-y-6">
-                        ${isSMM ? `
-                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-                                <h2 class="text-lg font-bold text-slate-200 mb-4">Team Members Roster</h2>
-                                <div class="space-y-3">
-                                    ${state.users.map(u => `
-                                        <div class="bg-slate-950 border border-slate-800 p-3 rounded-xl flex justify-between items-center">
-                                            <div>
-                                                <p class="font-semibold text-slate-200 text-sm">${u.username}</p>
-                                                <p class="text-xs text-blue-400">${u.role}</p>
-                                            </div>
-                                            ${u.username !== state.currentUser.username ? `
-                                                <select onchange="updateUserRole(${u.id}, this.value)" class="bg-slate-900 border border-slate-800 text-xs text-slate-300 rounded p-1">
-                                                    ${ROLES.map(r => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${r}</option>`).join('')}
-                                                </select>
-                                            ` : ''}
-                                        </div>
-                                    `).join('')}
+                        <div class="flex bg-slate-950 p-1 rounded-xl mb-6 border border-slate-800">
+                            <button onclick="switchTab('login')" class="flex-1 py-2 text-xs sm:text-sm font-semibold rounded-lg transition ${isLogin ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}">Sign In</button>
+                            <button onclick="switchTab('register')" class="flex-1 py-2 text-xs sm:text-sm font-semibold rounded-lg transition ${!isLogin ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}">Register</button>
+                        </div>
+                        ${isLogin ? `
+                            <form onsubmit="handleLogin(event)" class="space-y-4">
+                                <div>
+                                    <label class="block text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Username</label>
+                                    <input type="text" id="login-username" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 text-sm text-slate-100 focus:outline-none focus:border-blue-500" placeholder="Enter username">
                                 </div>
-                            </div>
+                                <div>
+                                    <label class="block text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Password</label>
+                                    <input type="password" id="login-password" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 text-sm text-slate-100 focus:outline-none focus:border-blue-500" placeholder="Enter password">
+                                </div>
+                                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold py-3 rounded-lg transition shadow-lg shadow-blue-600/20">Sign In</button>
+                            </form>
                         ` : `
-                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl text-center">
-                                <h2 class="text-lg font-bold text-slate-200 mb-2">Workspace Access</h2>
-                                <p class="text-xs text-slate-400">Member directory and role administration are restricted to the Social Media Manager.</p>
-                            </div>
+                            <form onsubmit="handleRegister(event)" class="space-y-4">
+                                <div>
+                                    <label class="block text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Choose Username</label>
+                                    <input type="text" id="reg-username" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 text-sm text-slate-100 focus:outline-none focus:border-blue-500" placeholder="Choose username">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Create Password</label>
+                                    <input type="password" id="reg-password" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 text-sm text-slate-100 focus:outline-none focus:border-blue-500" placeholder="Create password">
+                                </div>
+                                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold py-3 rounded-lg transition shadow-lg shadow-indigo-600/20">Create Account</button>
+                            </form>
                         `}
                     </div>
-                </main>
-            `;
-        }
-
-        async function updateUserRole(userId, newRole) {
-            const user = state.users.find(u => u.id === userId);
-            if (user) {
-                user.role = newRole;
-                await saveAppData();
-                render();
+                `;
+                document.body.className = "bg-slate-950 text-slate-100 min-h-screen flex flex-col items-center justify-center p-3 sm:p-6";
+            } else {
+                const isSMM = state.currentUser.role === 'Social Media Manager';
+                app.className = "w-full flex-1 flex flex-col max-w-7xl mx-auto";
+                app.innerHTML = `
+                    <header class="bg-slate-900 border-b border-slate-800 px-4 sm:px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full rounded-2xl sm:rounded-none mb-4 sm:mb-0">
+                        <div class="flex items-center space-x-3">
+                            <h1 class="text-lg sm:text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">LazuWrite</h1>
+                            <span class="text-[10px] sm:text-xs bg-blue-950 text-blue-400 border border-blue-800 px-2.5 py-0.5 rounded-full font-medium">${state.currentUser.role}</span>
+                        </div>
+                        <div class="flex items-center justify-between w-full sm:w-auto space-x-4">
+                            <span class="text-xs sm:text-sm text-slate-300">Hello, <b>${state.currentUser.username}</b></span>
+                            <button onclick="handleLogout()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs sm:text-sm px-3 py-1.5 rounded-lg transition">Sign Out</button>
+                        </div>
+                    </header>
+                    <main class="flex-1 p-2 sm:p-6 w-full grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+                        <div class="md:col-span-2 space-y-4 sm:space-y-6">
+                            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl">
+                                <h2 class="text-base sm:text-lg font-bold text-slate-200 mb-2">Team Workflow & Content Board</h2>
+                                <p class="text-xs sm:text-sm text-slate-400">Workspace active and scaled for your screen.</p>
+                            </div>
+                        </div>
+                        <div class="space-y-4 sm:space-y-6">
+                            ${isSMM ? `
+                                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl">
+                                    <h2 class="text-base sm:text-lg font-bold text-slate-200 mb-4">Team Members Roster</h2>
+                                    <div class="space-y-3">
+                                        ${state.users.map(u => `
+                                            <div class="bg-slate-950 border border-slate-800 p-3 rounded-xl flex justify-between items-center">
+                                                <div>
+                                                    <p class="font-semibold text-slate-200 text-xs sm:text-sm">${u.username}</p>
+                                                    <p class="text-[11px] text-blue-400">${u.role}</p>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : `
+                                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl text-center">
+                                    <h2 class="text-base sm:text-lg font-bold text-slate-200 mb-2">Workspace Access</h2>
+                                    <p class="text-xs text-slate-400">Member directory restricted to Social Media Manager.</p>
+                                </div>
+                            `}
+                        </div>
+                    </main>
+                `;
+                document.body.className = "bg-slate-950 text-slate-100 min-h-screen flex flex-col p-0 sm:p-4";
             }
         }
 
-        // Run App Instantly
-        initApp();
+        init();
     </script>
 </body>
 </html>
