@@ -3,34 +3,370 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LazuWrite - Team Coordination</title>
+    <title>LazuWrite - Team Coordination & Calendar</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: Inter, sans-serif; }
-        body { background-color: #030712; color: #f3f4f6; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; }
-        .card { background-color: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 24px; width: 100%; max-width: 400px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
-        h1 { font-size: 26px; font-weight: bold; text-align: center; background: linear-gradient(to right, #60a5fa, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; }
-        p.subtitle { text-align: center; color: #9ca3af; font-size: 13px; margin-bottom: 20px; }
-        .tabs { display: flex; background: #030712; padding: 4px; border-radius: 10px; border: 1px solid #1f2937; margin-bottom: 20px; }
-        .tab-btn { flex: 1; padding: 10px; font-size: 13px; font-weight: 600; border: none; background: transparent; color: #9ca3af; cursor: pointer; border-radius: 8px; transition: 0.2s; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background-color: #030712; color: #f3f4f6; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 12px; }
+        .card { background-color: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 24px; width: 100%; max-width: 380px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+        h1 { font-size: 24px; font-weight: bold; text-align: center; background: linear-gradient(to right, #60a5fa, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 4px; }
+        p.subtitle { text-align: center; color: #9ca3af; font-size: 12px; margin-bottom: 20px; }
+        .tabs { display: flex; background: #030712; padding: 4px; border-radius: 10px; border: 1px solid #1f2937; margin-bottom: 18px; }
+        .tab-btn { flex: 1; padding: 8px; font-size: 12px; font-weight: 600; border: none; background: transparent; color: #9ca3af; cursor: pointer; border-radius: 8px; transition: 0.2s; }
         .tab-btn.active { background: #2563eb; color: #ffffff; }
-        .form-group { margin-bottom: 14px; }
-        label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #9ca3af; margin-bottom: 6px; }
-        input, select { width: 100%; background: #030712; border: 1px solid #1f2937; border-radius: 8px; padding: 12px; color: #f3f4f6; font-size: 14px; outline: none; }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-size: 10px; font-weight: 600; text-transform: uppercase; color: #9ca3af; margin-bottom: 4px; }
+        input, select { width: 100%; background: #030712; border: 1px solid #1f2937; border-radius: 8px; padding: 10px; color: #f3f4f6; font-size: 13px; outline: none; }
         input:focus, select:focus { border-color: #3b82f6; }
-        button.submit-btn { width: 100%; background: #2563eb; color: #ffffff; font-weight: 600; padding: 12px; border: none; border-radius: 8px; cursor: pointer; margin-top: 6px; font-size: 14px; }
+        button.submit-btn { width: 100%; background: #2563eb; color: #ffffff; font-weight: 600; padding: 11px; border: none; border-radius: 8px; cursor: pointer; margin-top: 4px; font-size: 13px; }
         button.submit-btn:hover { background: #1d4ed8; }
         .dashboard { width: 100%; max-width: 1200px; flex: 1; display: flex; flex-direction: column; }
-        header { background: #111827; border: 1px solid #1f2937; padding: 16px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .logout-btn { background: #1f2937; color: #d1d5db; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; }
+        header { background: #111827; border: 1px solid #1f2937; padding: 14px 18px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+        .logout-btn { background: #1f2937; color: #d1d5db; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 11px; }
         .logout-btn:hover { background: #374151; }
-        .grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        .grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
         @media(min-width: 768px) { .grid { grid-template-columns: 2fr 1fr; } }
-        .panel { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
-        .panel h2 { font-size: 16px; font-weight: bold; margin-bottom: 14px; color: #e5e7eb; }
-        .roster-item { background: #030712; border: 1px solid #1f2937; padding: 12px; border-radius: 8px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
-        .role-tag { display: inline-flex; align-items: center; background: #1f2937; color: #d1d5db; font-size: 11px; padding: 3px 8px; border-radius: 4px; margin-right: 4px; }
-        .role-tag button { background: none; border: none; color: #f87171; font-weight: bold; margin-left: 6px; cursor: pointer; font-size: 13px; }
-        .badge-red { background: #450a0a; color: #f87171; border: 1px solid #7f1d1d; padding: 2px 8px; border-radius: 99px; font-size: 10px; }
-        .badge-amber { background: #451a03; color: #fbbf24; border: 1px solid #78350f; padding: 2px 8px; border-radius: 99px; font-size: 10px; }
-        .badge-blue { background: #172554; color: #93c5fd; border: 1px solid #1e40af; padding: 2px 8px; border-radius: 99px; font-size: 10px; }
-        .calendar-grid {
+        .panel { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+        .panel h2 { font-size: 15px; font-weight: bold; margin-bottom: 12px; color: #e5e7eb; }
+        .roster-item { background: #030712; border: 1px solid #1f2937; padding: 10px; border-radius: 8px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; }
+        .role-tag { display: inline-flex; align-items: center; background: #1f2937; color: #d1d5db; font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-right: 4px; }
+        .role-tag button { background: none; border: none; color: #f87171; font-weight: bold; margin-left: 4px; cursor: pointer; font-size: 12px; }
+        .badge-red { background: #450a0a; color: #f87171; border: 1px solid #7f1d1d; padding: 2px 6px; border-radius: 99px; font-size: 9px; font-weight: 600; }
+        .badge-amber { background: #451a03; color: #fbbf24; border: 1px solid #78350f; padding: 2px 6px; border-radius: 99px; font-size: 9px; font-weight: 600; }
+        .badge-blue { background: #172554; color: #93c5fd; border: 1px solid #1e40af; padding: 2px 6px; border-radius: 99px; font-size: 9px; font-weight: 600; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+        .cal-header { font-size: 10px; font-weight: 600; color: #6b7280; padding-bottom: 4px; }
+        .cal-cell { background: #030712; border: 1px solid #1f2937; border-radius: 6px; min-height: 65px; padding: 4px; display: flex; flex-direction: column; justify-content: space-between; text-align: left; }
+        .cal-day-num { font-size: 10px; font-weight: bold; color: #9ca3af; }
+    </style>
+</head>
+<body>
+
+    <div id="app"></div>
+
+    <script>
+        let state = {
+            currentUser: null,
+            users: JSON.parse(localStorage.getItem('lazu_users') || '[]'),
+            tasks: JSON.parse(localStorage.getItem('lazu_tasks') || '[]'),
+            authTab: 'login',
+            currentMonth: new Date().getMonth(),
+            currentYear: new Date().getFullYear()
+        };
+
+        const ROLES = [
+            'Social Media Manager',
+            'Chief Caption Writer',
+            'Chief PubMat Artist',
+            'Chief Text Formatter',
+            'Caption Writer',
+            'PubMat Artist',
+            'Text Formatter'
+        ];
+
+        const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+        function init() {
+            try {
+                const saved = sessionStorage.getItem('lazu_session');
+                if (saved) state.currentUser = JSON.parse(saved);
+            } catch (e) {
+                sessionStorage.removeItem('lazu_session');
+            }
+            render();
+            setInterval(render, 60000); // Live countdown refresh every minute
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('login-username').value.trim();
+            const password = document.getElementById('login-password').value;
+
+            const user = state.users.find(u => u.username.toLowerCase() === username.toLowerCase());
+            if (!user) { alert('Username not found! Please register first.'); return; }
+            if (user.password !== password) { alert('Incorrect password!'); return; }
+
+            state.currentUser = user;
+            sessionStorage.setItem('lazu_session', JSON.stringify(user));
+            render();
+        }
+
+        function handleRegister(e) {
+            e.preventDefault();
+            const username = document.getElementById('reg-username').value.trim();
+            const password = document.getElementById('reg-password').value;
+
+            if (state.users.some(u => u.username.toLowerCase() === username.toLowerCase())) {
+                alert('Username already exists!'); return;
+            }
+
+            const isFirst = state.users.length === 0;
+            const newUser = {
+                id: Date.now(),
+                username,
+                password,
+                roles: [isFirst ? 'Social Media Manager' : 'Caption Writer']
+            };
+
+            state.users.push(newUser);
+            state.currentUser = newUser;
+            localStorage.setItem('lazu_users', JSON.stringify(state.users));
+            sessionStorage.setItem('lazu_session', JSON.stringify(newUser));
+            render();
+        }
+
+        function handleLogout() {
+            state.currentUser = null;
+            sessionStorage.removeItem('lazu_session');
+            render();
+        }
+
+        function switchTab(tab) {
+            state.authTab = tab;
+            render();
+        }
+
+        function handleAddTask(e) {
+            e.preventDefault();
+            const title = document.getElementById('task-title').value.trim();
+            const assignee = document.getElementById('task-assignee').value;
+            const deadline = document.getElementById('task-deadline').value;
+
+            if (!title || !deadline) return;
+
+            state.tasks.push({ id: Date.now(), title, assignee, deadline, status: 'Pending' });
+            localStorage.setItem('lazu_tasks', JSON.stringify(state.tasks));
+            render();
+        }
+
+        function updateTaskStatus(taskId, status) {
+            const task = state.tasks.find(t => t.id === taskId);
+            if (task) {
+                task.status = status;
+                localStorage.setItem('lazu_tasks', JSON.stringify(state.tasks));
+                render();
+            }
+        }
+
+        function addUserRole(userId, newRole) {
+            if (!state.currentUser.roles.includes('Social Media Manager')) {
+                alert('Permission denied: Only the Social Media Manager can assign roles.'); return;
+            }
+            const user = state.users.find(u => u.id === userId);
+            if (user) {
+                if (!user.roles) user.roles = ['Caption Writer'];
+                if (user.roles.length >= 2) { alert('Maximum limit reached: A member can have at most 2 roles.'); return; }
+                if (user.roles.includes(newRole)) { alert('This member already has this role.'); return; }
+                user.roles.push(newRole);
+                localStorage.setItem('lazu_users', JSON.stringify(state.users));
+                render();
+            }
+        }
+
+        function removeUserRole(userId, roleToRemove) {
+            if (!state.currentUser.roles.includes('Social Media Manager')) {
+                alert('Permission denied: Only the Social Media Manager can modify roles.'); return;
+            }
+            const user = state.users.find(u => u.id === userId);
+            if (user && user.roles) {
+                if (user.roles.length <= 1) { alert('Members must retain at least 1 role.'); return; }
+                user.roles = user.roles.filter(r => r !== roleToRemove);
+                localStorage.setItem('lazu_users', JSON.stringify(state.users));
+                render();
+            }
+        }
+
+        function changeMonth(direction) {
+            state.currentMonth += direction;
+            if (state.currentMonth > 11) { state.currentMonth = 0; state.currentYear++; }
+            else if (state.currentMonth < 0) { state.currentMonth = 11; state.currentYear--; }
+            render();
+        }
+
+        function getReminderBadge(deadlineStr) {
+            const now = new Date();
+            const deadline = new Date(deadlineStr);
+            const diffHours = (deadline - now) / (1000 * 60 * 60);
+            if (diffHours < 0) return `<span class="badge-red">Overdue</span>`;
+            if (diffHours <= 24) return `<span class="badge-amber">24hr Reminder!</span>`;
+            if (diffHours <= 48) return `<span class="badge-blue">48hr Notice</span>`;
+            return `<span style="background:#1f2937; color:#9ca3af; padding:2px 6px; border-radius:99px; font-size:9px;">Scheduled</span>`;
+        }
+
+        function renderCalendar() {
+            const firstDay = new Date(state.currentYear, state.currentMonth, 1).getDay();
+            const daysInMonth = new Date(state.currentYear, state.currentMonth + 1, 0).getDate();
+
+            let cells = '';
+            for (let i = 0; i < firstDay; i++) {
+                cells += `<div class="cal-cell" style="opacity: 0.15;"></div>`;
+            }
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = `${state.currentYear}-${String(state.currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const dayTasks = state.tasks.filter(t => t.deadline.startsWith(dateStr));
+
+                cells += `
+                    <div class="cal-cell">
+                        <span class="cal-day-num">${day}</span>
+                        <div style="overflow-y:auto; max-height:45px;">
+                            ${dayTasks.map(t => `<div style="background:#172554; color:#93c5fd; padding:1px 3px; border-radius:3px; font-size:8px; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${t.title} (${t.assignee})"><b>${t.assignee}:</b> ${t.title}</div>`).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="panel">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <h3 style="font-size:14px; font-weight:bold;">${MONTH_NAMES[state.currentMonth]} ${state.currentYear}</h3>
+                        <div>
+                            <button onclick="changeMonth(-1)" class="logout-btn">&larr; Prev</button>
+                            <button onclick="changeMonth(1)" class="logout-btn">Next &rarr;</button>
+                        </div>
+                    </div>
+                    <div class="calendar-grid cal-header">
+                        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                    </div>
+                    <div class="calendar-grid">
+                        ${cells}
+                    </div>
+                </div>
+            `;
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            if (!state.currentUser) {
+                const isLogin = state.authTab === 'login';
+                document.body.style.alignItems = "center";
+                app.innerHTML = `
+                    <div class="card">
+                        <h1>LazuWrite</h1>
+                        <p class="subtitle">Team Coordination & Workflow Hub</p>
+                        <div class="tabs">
+                            <button onclick="switchTab('login')" class="tab-btn ${isLogin ? 'active' : ''}">Sign In</button>
+                            <button onclick="switchTab('register')" class="tab-btn ${!isLogin ? 'active' : ''}">Register</button>
+                        </div>
+                        ${isLogin ? `
+                            <form onsubmit="handleLogin(event)">
+                                <div class="form-group"><label>Username</label><input type="text" id="login-username" required placeholder="Enter username"></div>
+                                <div class="form-group"><label>Password</label><input type="password" id="login-password" required placeholder="Enter password"></div>
+                                <button type="submit" class="submit-btn">Sign In</button>
+                            </form>
+                        ` : `
+                            <form onsubmit="handleRegister(event)">
+                                <div class="form-group"><label>Choose Username</label><input type="text" id="reg-username" required placeholder="Choose username"></div>
+                                <div class="form-group"><label>Create Password</label><input type="password" id="reg-password" required placeholder="Create password"></div>
+                                <button type="submit" class="submit-btn" style="background:#4f46e5;">Create Account</button>
+                            </form>
+                        `}
+                    </div>
+                `;
+            } else {
+                const isSMM = state.currentUser.roles && state.currentUser.roles.includes('Social Media Manager');
+                document.body.style.alignItems = "stretch";
+                app.className = "dashboard";
+                app.innerHTML = `
+                    <header>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <h1 style="font-size:17px; margin:0;">LazuWrite</h1>
+                            <span style="background:#172554; color:#93c5fd; border:1px solid #1e40af; font-size:10px; padding:2px 6px; border-radius:99px;">${(state.currentUser.roles || []).join(', ')}</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <span style="font-size:12px; color:#d1d5db;">Hello, <b>${state.currentUser.username}</b></span>
+                            <button onclick="handleLogout()" class="logout-btn">Sign Out</button>
+                        </div>
+                    </header>
+                    <main class="grid">
+                        <div style="display:flex; flex-direction:column; gap:16px;">
+                            <!-- Task Assignment Form -->
+                            <div class="panel">
+                                <h2>Assign Task & Set Deadline</h2>
+                                <form onsubmit="handleAddTask(event)" style="display:flex; flex-direction:column; gap:8px;">
+                                    <input type="text" id="task-title" required placeholder="Task description (e.g. Publish Promo PubMat)">
+                                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                                        <select id="task-assignee">
+                                            ${state.users.map(u => `<option value="${u.username}">${u.username} (${(u.roles || []).join(', ')})</option>`).join('')}
+                                        </select>
+                                        <input type="datetime-local" id="task-deadline" required>
+                                    </div>
+                                    <button type="submit" class="submit-btn">Publish & Assign Task</button>
+                                </form>
+                            </div>
+
+                            <!-- Tasks List & Reminders -->
+                            <div class="panel">
+                                <h2>Active Team Tasks & Deadlines</h2>
+                                <div style="display:flex; flex-direction:column; gap:8px;">
+                                    ${state.tasks.length === 0 ? `<p style="color:#6b7280; font-size:11px;">No tasks assigned yet.</p>` : ''}
+                                    ${state.tasks.map(t => `
+                                        <div style="background:#030712; border:1px solid #1f2937; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                                            <div>
+                                                <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+                                                    <span style="font-weight:600; font-size:12px;">${t.title}</span>
+                                                    ${getReminderBadge(t.deadline)}
+                                                </div>
+                                                <span style="font-size:10px; color:#9ca3af;">Assigned to: <b style="color:#60a5fa">${t.assignee}</b> &bull; Due: ${new Date(t.deadline).toLocaleString()}</span>
+                                            </div>
+                                            <select onchange="updateTaskStatus(${t.id}, this.value)" style="width:auto; padding:5px; font-size:11px;">
+                                                <option value="Pending" ${t.status === 'Pending' ? 'selected' : ''}>Pending</option>
+                                                <option value="In Progress" ${t.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                                                <option value="Completed" ${t.status === 'Completed' ? 'selected' : ''}>Completed</option>
+                                            </select>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+
+                            <!-- Month Calendar View -->
+                            ${renderCalendar()}
+                        </div>
+
+                        <!-- Right Column: SMM-Only Roster & Multi-Role Manager -->
+                        <div>
+                            ${isSMM ? `
+                                <div class="panel">
+                                    <h2>Team Members Roster</h2>
+                                    <div style="display:flex; flex-direction:column; gap:8px;">
+                                        ${state.users.map(u => `
+                                            <div class="roster-item">
+                                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                                    <span style="font-weight:600; font-size:12px;">${u.username}</span>
+                                                </div>
+                                                <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                                                    ${(u.roles || []).map(r => `
+                                                        <span class="role-tag">
+                                                            ${r}
+                                                            ${u.roles.length > 1 ? `<button onclick="removeUserRole(${u.id}, '${r}')">&times;</button>` : ''}
+                                                        </span>
+                                                    `).join('')}
+                                                </div>
+                                                ${(u.roles || []).length < 2 ? `
+                                                    <div style="display:flex; gap:6px; margin-top:2px;">
+                                                        <select id="add-role-${u.id}" style="padding:4px; font-size:10px;">
+                                                            <option value="">+ Add second role...</option>
+                                                            ${ROLES.filter(r => !(u.roles || []).includes(r)).map(r => `<option value="${r}">${r}</option>`).join('')}
+                                                        </select>
+                                                        <button onclick="const sel = document.getElementById('add-role-${u.id}'); if(sel.value) addUserRole(${u.id}, sel.value);" style="background:#2563eb; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-size:10px; cursor:pointer;">Add</button>
+                                                    </div>
+                                                ` : `<span style="font-size:9px; color:#6b7280; font-style:italic;">Max 2 roles reached</span>`}
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : `
+                                <div class="panel" style="text-align:center;">
+                                    <h2>Workspace Access</h2>
+                                    <p style="font-size:11px; color:#9ca3af;">Member directory and role administration are strictly restricted to the Social Media Manager.</p>
+                                </div>
+                            `}
+                        </div>
+                    </main>
+                `;
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
