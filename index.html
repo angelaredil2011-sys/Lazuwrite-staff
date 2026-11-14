@@ -81,11 +81,14 @@
             currentMonth: new Date().getMonth(),
             currentYear: new Date().getFullYear(),
             editingTaskId: null,
-            currentView: 'dashboard' // 'dashboard' or 'settings'
+            currentView: 'dashboard'
         };
 
         const ROLES = [
             'Social Media Manager',
+            'Make Pubmat',
+            'Make Caption',
+            'Edit caption',
             'Chief Caption Writer',
             'Chief PubMat Artist',
             'Chief Text Formatter',
@@ -139,7 +142,6 @@
                             state.currentUser = upToDateUser;
                             sessionStorage.setItem('lazu_session', JSON.stringify(upToDateUser));
                         } else {
-                            // User was deleted by SMM
                             handleLogout();
                         }
                     }
@@ -490,7 +492,7 @@
                 `;
             } else {
                 const isSMM = state.currentUser.roles && state.currentUser.roles.includes('Social Media Manager');
-                const isPubMatArtist = state.currentUser.roles && state.currentUser.roles.some(r => r.includes('PubMat Artist'));
+                const isPubMatRole = state.currentUser.roles && state.currentUser.roles.some(r => r.includes('PubMat'));
                 const editingTask = state.editingTaskId ? state.tasks.find(t => t.id === state.editingTaskId) : null;
 
                 app.className = "dashboard";
@@ -585,9 +587,9 @@
                                                     ${isAssignedToMe ? `
                                                         <div style="background:#111827; border:1px solid #1f2937; padding:8px; border-radius:6px; margin-top:4px;">
                                                             <label style="margin-bottom:4px; color:#60a5fa;">Your Submission:</label>
-                                                            ${isPubMatArtist ? `
+                                                            ${isPubMatRole ? `
                                                                 <div style="font-size:11px; color:#d1d5db; margin-bottom:6px;">
-                                                                    As a PubMat Artist, please open the <a href="https://drive.google.com/drive/folders/1LUc27TF7zExN6MyLOVJw8ZSG_Q4b7Gwu" target="_blank" style="color:#60a5fa; text-decoration:underline;">Google Drive Folder</a> to upload your photo, then paste your submission notes below:
+                                                                    As a PubMat creator, please open the <a href="https://drive.google.com/drive/folders/1LUc27TF7zExN6MyLOVJw8ZSG_Q4b7Gwu" target="_blank" style="color:#60a5fa; text-decoration:underline;">Google Drive Folder</a> to upload your photo, then paste your submission notes below:
                                                                 </div>
                                                             ` : ''}
                                                             <textarea id="sub-text-${t.id}" rows="2" placeholder="Type your text submission or link here..." style="margin-bottom:6px;">${t.submission || ''}</textarea>
