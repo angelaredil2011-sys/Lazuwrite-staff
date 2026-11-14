@@ -15,12 +15,7 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col p-3 sm:p-6">
 
-    <div id="app" class="w-full flex-1 flex flex-col items-center justify-center">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl w-full max-w-md text-center">
-            <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">LazuWrite</h1>
-            <p class="text-slate-400 text-sm mt-2">Loading LazuWrite workspace...</p>
-        </div>
-    </div>
+    <div id="app" class="w-full flex-1 flex flex-col items-center justify-center"></div>
 
     <script>
         // Supabase Configuration
@@ -30,4 +25,39 @@
 
         try {
             if (window.supabase) {
-                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE
+                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            }
+        } catch (e) {
+            console.error('Supabase init warning:', e);
+        }
+
+        let state = {
+            currentUser: null,
+            users: JSON.parse(localStorage.getItem('lazu_users') || '[]'),
+            tasks: JSON.parse(localStorage.getItem('lazu_tasks') || '[]'),
+            authTab: 'login',
+            currentMonth: new Date().getMonth(),
+            currentYear: new Date().getFullYear()
+        };
+
+        const ROLES = [
+            'Social Media Manager',
+            'Chief Caption Writer',
+            'Chief PubMat Artist',
+            'Chief Text Formatter',
+            'Caption Writer',
+            'PubMat Artist',
+            'Text Formatter'
+        ];
+
+        const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+        function init() {
+            const saved = sessionStorage.getItem('lazu_session');
+            if (saved) {
+                try {
+                    state.currentUser = JSON.parse(saved);
+                } catch (e) {
+                    sessionStorage.removeItem('lazu_session');
+                }
+            }
