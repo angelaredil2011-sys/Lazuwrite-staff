@@ -3,119 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LazuWrite - Team Coordination & Calendar</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Supabase JavaScript SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <title>LazuWrite - Team Coordination</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-    </style>
-</head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col p-3 sm:p-6">
-
-    <div id="app" class="w-full flex-1 flex flex-col items-center justify-center">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl w-full max-w-md text-center">
-            <h1 class="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">LazuWrite</h1>
-            <p class="text-slate-400 text-sm mt-2">Initializing workspace...</p>
-        </div>
-    </div>
-
-    <script>
-        // Global Error Boundary to prevent silent blue screen crashes
-        window.onerror = function(msg, url, line) {
-            document.getElementById('app').innerHTML = `
-                <div class="bg-red-950 border border-red-800 rounded-2xl p-6 text-red-200 max-w-lg w-full">
-                    <h2 class="font-bold text-lg mb-2">Runtime Error Caught</h2>
-                    <p class="text-xs font-mono bg-black/40 p-2 rounded">${msg}</p>
-                    <p class="text-xs mt-3 text-red-300">Line: ${line}</p>
-                    <button onclick="localStorage.clear(); sessionStorage.clear(); location.reload();" class="mt-4 bg-red-600 hover:bg-red-500 text-white text-xs font-semibold px-4 py-2 rounded-lg">Clear Storage & Restart</button>
-                </div>
-            `;
-            return true;
-        };
-
-        // Supabase Configuration
-        const SUPABASE_URL = 'https://ulmwwuvvioihhosyfflp.supabase.co';
-        const SUPABASE_ANON_KEY = 'sb_publishable_pM7zmfoy7UHnwAY6Wii7mQ_zBBObH-V';
-        let supabaseClient = null;
-
-        try {
-            if (window.supabase) {
-                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            }
-        } catch (e) {
-            console.error('Supabase init warning:', e);
-        }
-
-        let state = {
-            currentUser: null,
-            users: [],
-            tasks: [],
-            authTab: 'login',
-            currentMonth: new Date().getMonth(),
-            currentYear: new Date().getFullYear()
-        };
-
-        try {
-            const storedUsers = localStorage.getItem('lazu_users');
-            if (storedUsers) state.users = JSON.parse(storedUsers);
-            const storedTasks = localStorage.getItem('lazu_tasks');
-            if (storedTasks) state.tasks = JSON.parse(storedTasks);
-        } catch (e) {
-            console.error('Storage parse error, resetting:', e);
-            localStorage.clear();
-        }
-
-        const ROLES = [
-            'Social Media Manager',
-            'Chief Caption Writer',
-            'Chief PubMat Artist',
-            'Chief Text Formatter',
-            'Caption Writer',
-            'PubMat Artist',
-            'Text Formatter'
-        ];
-
-        const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-        function init() {
-            try {
-                const saved = sessionStorage.getItem('lazu_session');
-                if (saved) {
-                    state.currentUser = JSON.parse(saved);
-                }
-            } catch (e) {
-                sessionStorage.removeItem('lazu_session');
-            }
-
-            // Render UI immediately
-            render();
-
-            // Background fetch from Supabase
-            if (supabaseClient) {
-                fetchAppData();
-                setupRealtimeSync();
-            }
-
-            setInterval(render, 60000);
-        }
-
-        async function fetchAppData() {
-            if (!supabaseClient) return;
-            try {
-                const { data, error } = await supabaseClient
-                    .from('app_state')
-                    .select('*')
-                    .eq('id', 1)
-                    .single();
-
-                if (data && data.payload) {
-                    state.users = (data.payload.users || []).map(u => ({
-                        ...u,
-                        roles: u.roles || [u.role || 'Caption Writer']
-                    }));
-                    state.tasks = data.payload.tasks || [];
-                    
-                    localStorage.setItem('lazu_users', JSON
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: Inter, sans-serif; }
+        body { background-color: #030712; color: #f3f4f6; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; }
+        .card { background-color: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 24px; width: 100%; max-width: 400px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+        h1 { font-size: 26px; font-weight: bold; text-align: center; background: linear-gradient(to right, #60a5fa, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 6px; }
+        p.subtitle { text-align: center; color: #9ca3af; font-size: 13px; margin-bottom: 20px; }
+        .tabs { display: flex; background: #030712; padding: 4px; border-radius: 10px; border: 1px solid #1f2937; margin-bottom: 20px; }
+        .tab-btn { flex: 1; padding: 10px; font-size: 13px; font-weight: 600; border: none; background: transparent; color: #9ca3af; cursor: pointer; border-radius: 8px; transition: 0.2s; }
+        .tab-btn.active { background: #2563eb; color: #ffffff; }
+        .form-group { margin-bottom: 14px; }
+        label { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; color: #9ca3af; margin-bottom: 6px; }
+        input, select { width: 100%; background: #030712; border: 1px solid #1f2937; border-radius: 8px; padding: 12px; color: #f3f4f6; font-size: 14px; outline: none; }
+        input:focus, select:focus { border-color: #3b82f6; }
+        button.submit-btn { width: 100%; background: #2563eb; color: #ffffff; font-weight: 600; padding: 12px; border: none; border-radius: 8px; cursor: pointer; margin-top: 6px; font-size: 14px; }
+        button.submit-btn:hover { background: #1d4ed8; }
+        .dashboard { width: 100%; max-width: 1200px; flex: 1; display: flex; flex-direction: column; }
+        header { background: #111827; border: 1px solid #1f2937; padding: 16px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .logout-btn { background: #1f2937; color: #d1d5db; border: none; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 12px; }
+        .logout-btn:hover { background: #374151; }
+        .grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        @media(min-width: 768px) { .grid { grid-template-columns: 2fr 1fr; } }
+        .panel { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+        .panel h2 { font-size: 16px; font-weight: bold; margin-bottom: 14px; color: #e5e7eb; }
+        .roster-item { background: #030712; border: 1px solid #1f2937; padding: 12px; border-radius: 8px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .role-tag { display: inline-flex; align-items: center; background: #1f2937; color: #d1d5db; font-size: 11px; padding: 3px 8px; border-radius: 4px; margin-right: 4px; }
+        .role-tag button { background: none; border: none; color: #f87171; font-weight: bold; margin-left: 6px; cursor: pointer; font-size: 13px; }
+        .badge-red { background: #450a0a; color: #f87171; border: 1px solid #7f1d1d; padding: 2px 8px; border-radius: 99px; font-size: 10px; }
+        .badge-amber { background: #451a03; color: #fbbf24; border: 1px solid #78350f; padding: 2px 8px; border-radius: 99px; font-size: 10px; }
+        .badge-blue { background: #172554; color: #93c5fd; border: 1px solid #1e40af; padding: 2px 8px; border-radius: 99px; font-size: 10px; }
+        .calendar-grid {
