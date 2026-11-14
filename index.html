@@ -26,8 +26,11 @@
 
         .dashboard { width: 100%; max-width: 1300px; flex: 1; display: flex; flex-direction: column; margin: 0 auto; }
         header { background: #111827; border: 1px solid #1f2937; padding: 14px 18px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
-        .logout-btn { background: #1f2937; color: #d1d5db; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 11px; }
-        .logout-btn:hover { background: #374151; }
+        .nav-links { display: flex; gap: 8px; }
+        .nav-link { background: #1f2937; color: #d1d5db; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 11px; font-weight: 600; }
+        .nav-link.active { background: #2563eb; color: #fff; }
+        .logout-btn { background: #1f2937; color: #f87171; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 11px; }
+        .logout-btn:hover { background: #7f1d1d; color: #fff; }
         
         .grid { display: grid; grid-template-columns: 1fr; gap: 16px; width: 100%; }
         @media(min-width: 900px) { .grid { grid-template-columns: 2fr 1fr; } }
@@ -77,7 +80,8 @@
             authTab: 'login',
             currentMonth: new Date().getMonth(),
             currentYear: new Date().getFullYear(),
-            editingTaskId: null
+            editingTaskId: null,
+            currentView: 'dashboard' // 'dashboard' or 'settings'
         };
 
         const ROLES = [
@@ -134,6 +138,9 @@
                         if (upToDateUser) {
                             state.currentUser = upToDateUser;
                             sessionStorage.setItem('lazu_session', JSON.stringify(upToDateUser));
+                        } else {
+                            // User was deleted by SMM
+                            handleLogout();
                         }
                     }
                     render();
@@ -180,6 +187,8 @@
                                 if (upToDateUser) {
                                     state.currentUser = upToDateUser;
                                     sessionStorage.setItem('lazu_session', JSON.stringify(upToDateUser));
+                                } else {
+                                    handleLogout();
                                 }
                             }
                             render();
@@ -236,12 +245,18 @@
         function handleLogout() {
             state.currentUser = null;
             state.editingTaskId = null;
+            state.currentView = 'dashboard';
             sessionStorage.removeItem('lazu_session');
             render();
         }
 
         function switchTab(tab) {
             state.authTab = tab;
+            render();
+        }
+
+        function setView(view) {
+            state.currentView = view;
             render();
         }
 
@@ -361,6 +376,30 @@
             }
         }
 
+        async function removeMember(userId) {
+            if (!state.currentUser.roles.includes('Social Media Manager')) {
+                alert('Permission denied: Only the Social Media Manager can remove members.'); return;
+            }
+
+            const pin = prompt('Enter confirmation password (qw) to remove this member:');
+            if (pin === null) return;
+            if (pin !== 'qw') {
+                alert('Incorrect password! Removal canceled.');
+                return;
+            }
+
+            const targetUser = state.users.find(u => u.id === userId);
+            if (targetUser && targetUser.roles && targetUser.roles.includes('Social Media Manager')) {
+                alert('Cannot remove the primary Social Media Manager.');
+                return;
+            }
+
+            state.users = state.users.filter(u => u.id !== userId);
+            await saveAppData();
+            alert('Member removed successfully.');
+            render();
+        }
+
         function changeMonth(direction) {
             state.currentMonth += direction;
             if (state.currentMonth > 11) { state.currentMonth = 0; state.currentYear++; }
@@ -461,130 +500,155 @@
                             <h1 style="font-size:17px; margin:0;">LazuWrite</h1>
                             <span style="background:#172554; color:#93c5fd; border:1px solid #1e40af; font-size:10px; padding:2px 6px; border-radius:99px;">${(state.currentUser.roles || []).join(', ')}</span>
                         </div>
-                        <div style="display:flex; align-items:center; gap:12px;">
+                        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
                             <span style="font-size:12px; color:#d1d5db;">Hello, <b>${state.currentUser.username}</b></span>
+                            <div class="nav-links">
+                                <button onclick="setView('dashboard')" class="nav-link ${state.currentView === 'dashboard' ? 'active' : ''}">Dashboard</button>
+                                ${isSMM ? `<button onclick="setView('settings')" class="nav-link ${state.currentView === 'settings' ? 'active' : ''}">Settings</button>` : ''}
+                            </div>
                             <button onclick="handleLogout()" class="logout-btn">Sign Out</button>
                         </div>
                     </header>
-                    <main class="grid">
-                        <div style="display:flex; flex-direction:column; gap:16px;">
-                            <!-- SMM-Only Task Assignment / Edit Form -->
-                            ${isSMM ? `
-                                <div class="panel" style="${editingTask ? 'border-color: #2563eb;' : ''}">
-                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
-                                        <h2 style="margin:0;">${editingTask ? 'Edit Task Schedule' : 'Assign Task & Set Deadline'}</h2>
-                                        ${editingTask ? `<button onclick="cancelEdit()" class="logout-btn" style="background:#7f1d1d; color:#fca5a5;">Cancel Edit</button>` : ''}
-                                    </div>
-                                    <form onsubmit="handleTaskSubmit(event)" style="display:flex; flex-direction:column; gap:8px;">
-                                        <input type="text" id="task-title" required value="${editingTask ? editingTask.title : ''}" placeholder="Task description (e.g. Publish Promo PubMat)">
-                                        <div style="display:grid; grid-template-columns: 1fr; gap:8px;">
-                                            <select id="task-assignee">
-                                                ${state.users.map(u => `<option value="${u.username}" ${editingTask && editingTask.assignee === u.username ? 'selected' : ''}>${u.username} (${(u.roles || []).join(', ')})</option>`).join('')}
-                                            </select>
-                                            <input type="datetime-local" id="task-deadline" required value="${editingTask ? editingTask.deadline : ''}">
+
+                    ${state.currentView === 'settings' && isSMM ? `
+                        <div class="panel" style="max-width: 600px; margin: 0 auto; width: 100%;">
+                            <h2>Settings & Member Management</h2>
+                            <p style="font-size: 11px; color: #9ca3af; margin-bottom: 14px;">Manage and remove team members securely using password confirmation.</p>
+                            <div style="display:flex; flex-direction:column; gap:8px;">
+                                ${state.users.map(u => `
+                                    <div style="background:#030712; border:1px solid #1f2937; padding:12px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+                                        <div>
+                                            <span style="font-weight:600; font-size:13px; color:#f3f4f6;">${u.username}</span>
+                                            <div style="font-size:10px; color:#9ca3af; margin-top:2px;">Roles: ${(u.roles || []).join(', ')}</div>
                                         </div>
-                                        <button type="submit" class="submit-btn" style="${editingTask ? 'background:#059669;' : ''}">${editingTask ? 'Save Changes' : 'Publish & Assign Task'}</button>
-                                    </form>
-                                </div>
-                            ` : ''}
-
-                            <!-- Tasks List & Submissions -->
-                            <div class="panel">
-                                <h2>Active Team Tasks & Deadlines</h2>
-                                <div style="display:flex; flex-direction:column; gap:12px;">
-                                    ${state.tasks.length === 0 ? `<p style="color:#6b7280; font-size:11px;">No tasks assigned yet.</p>` : ''}
-                                    ${state.tasks.map(t => {
-                                        const isAssignedToMe = t.assignee === state.currentUser.username;
-                                        return `
-                                            <div style="background:#030712; border:1px solid #1f2937; padding:12px; border-radius:8px; display:flex; flex-direction:column; gap:8px;">
-                                                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap;">
-                                                    <div style="flex: 1; min-width: 180px;">
-                                                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px; flex-wrap:wrap;">
-                                                            <span style="font-weight:600; font-size:13px;">${t.title}</span>
-                                                            ${getReminderBadge(t.deadline)}
-                                                        </div>
-                                                        <span style="font-size:10px; color:#9ca3af;">Assigned to: <b style="color:#60a5fa">${t.assignee}</b> &bull; Due: ${new Date(t.deadline).toLocaleString()}</span>
-                                                    </div>
-                                                    <div style="display:flex; align-items:center; gap:6px;">
-                                                        <select onchange="updateTaskStatus(${t.id}, this.value)" style="width:auto; padding:5px; font-size:11px;">
-                                                            <option value="Pending" ${t.status === 'Pending' ? 'selected' : ''}>Pending</option>
-                                                            <option value="In Progress" ${t.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
-                                                            <option value="Completed" ${t.status === 'Completed' ? 'selected' : ''}>Completed</option>
-                                                        </select>
-                                                        ${isSMM ? `
-                                                            <button onclick="startEditTask(${t.id})" class="action-btn">Edit</button>
-                                                            <button onclick="deleteTask(${t.id})" class="action-btn del">Delete</button>
-                                                        ` : ''}
-                                                    </div>
-                                                </div>
-
-                                                <!-- Submission Area for Assigned User -->
-                                                ${isAssignedToMe ? `
-                                                    <div style="background:#111827; border:1px solid #1f2937; padding:8px; border-radius:6px; margin-top:4px;">
-                                                        <label style="margin-bottom:4px; color:#60a5fa;">Your Submission:</label>
-                                                        ${isPubMatArtist ? `
-                                                            <div style="font-size:11px; color:#d1d5db; margin-bottom:6px;">
-                                                                As a PubMat Artist, please open the <a href="https://drive.google.com/drive/folders/1LUc27TF7zExN6MyLOVJw8ZSG_Q4b7Gwu" target="_blank" style="color:#60a5fa; text-decoration:underline;">Google Drive Folder</a> to upload your photo, then paste your submission notes below:
-                                                            </div>
-                                                        ` : ''}
-                                                        <textarea id="sub-text-${t.id}" rows="2" placeholder="Type your text submission or link here..." style="margin-bottom:6px;">${t.submission || ''}</textarea>
-                                                        <button onclick="submitTaskWork(${t.id})" class="action-btn" style="background:#2563eb; color:#fff; padding:6px 12px;">Submit Work</button>
-                                                    </div>
-                                                ` : t.submission ? `
-                                                    <div style="font-size:10px; color:#9ca3af; background:#111827; padding:6px; border-radius:4px;">
-                                                        <b>Submission:</b> ${t.submission}
-                                                    </div>
-                                                ` : ''}
+                                        ${!u.roles.includes('Social Media Manager') ? `
+                                            <button onclick="removeMember(${u.id})" class="action-btn del" style="padding:6px 10px;">Remove Member</button>
+                                        ` : `<span style="font-size:10px; color:#60a5fa; font-style:italic;">Primary SMM</span>`}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : `
+                        <main class="grid">
+                            <div style="display:flex; flex-direction:column; gap:16px;">
+                                <!-- SMM-Only Task Assignment / Edit Form -->
+                                ${isSMM ? `
+                                    <div class="panel" style="${editingTask ? 'border-color: #2563eb;' : ''}">
+                                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                                            <h2 style="margin:0;">${editingTask ? 'Edit Task Schedule' : 'Assign Task & Set Deadline'}</h2>
+                                            ${editingTask ? `<button onclick="cancelEdit()" class="logout-btn" style="background:#7f1d1d; color:#fca5a5;">Cancel Edit</button>` : ''}
+                                        </div>
+                                        <form onsubmit="handleTaskSubmit(event)" style="display:flex; flex-direction:column; gap:8px;">
+                                            <input type="text" id="task-title" required value="${editingTask ? editingTask.title : ''}" placeholder="Task description (e.g. Publish Promo PubMat)">
+                                            <div style="display:grid; grid-template-columns: 1fr; gap:8px;">
+                                                <select id="task-assignee">
+                                                    ${state.users.map(u => `<option value="${u.username}" ${editingTask && editingTask.assignee === u.username ? 'selected' : ''}>${u.username} (${(u.roles || []).join(', ')})</option>`).join('')}
+                                                </select>
+                                                <input type="datetime-local" id="task-deadline" required value="${editingTask ? editingTask.deadline : ''}">
                                             </div>
-                                        `;
-                                    }).join('')}
+                                            <button type="submit" class="submit-btn" style="${editingTask ? 'background:#059669;' : ''}">${editingTask ? 'Save Changes' : 'Publish & Assign Task'}</button>
+                                        </form>
+                                    </div>
+                                ` : ''}
+
+                                <!-- Tasks List & Submissions -->
+                                <div class="panel">
+                                    <h2>Active Team Tasks & Deadlines</h2>
+                                    <div style="display:flex; flex-direction:column; gap:12px;">
+                                        ${state.tasks.length === 0 ? `<p style="color:#6b7280; font-size:11px;">No tasks assigned yet.</p>` : ''}
+                                        ${state.tasks.map(t => {
+                                            const isAssignedToMe = t.assignee === state.currentUser.username;
+                                            return `
+                                                <div style="background:#030712; border:1px solid #1f2937; padding:12px; border-radius:8px; display:flex; flex-direction:column; gap:8px;">
+                                                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap;">
+                                                        <div style="flex: 1; min-width: 180px;">
+                                                            <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px; flex-wrap:wrap;">
+                                                                <span style="font-weight:600; font-size:13px;">${t.title}</span>
+                                                                ${getReminderBadge(t.deadline)}
+                                                            </div>
+                                                            <span style="font-size:10px; color:#9ca3af;">Assigned to: <b style="color:#60a5fa">${t.assignee}</b> &bull; Due: ${new Date(t.deadline).toLocaleString()}</span>
+                                                        </div>
+                                                        <div style="display:flex; align-items:center; gap:6px;">
+                                                            <select onchange="updateTaskStatus(${t.id}, this.value)" style="width:auto; padding:5px; font-size:11px;">
+                                                                <option value="Pending" ${t.status === 'Pending' ? 'selected' : ''}>Pending</option>
+                                                                <option value="In Progress" ${t.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                                                                <option value="Completed" ${t.status === 'Completed' ? 'selected' : ''}>Completed</option>
+                                                            </select>
+                                                            ${isSMM ? `
+                                                                <button onclick="startEditTask(${t.id})" class="action-btn">Edit</button>
+                                                                <button onclick="deleteTask(${t.id})" class="action-btn del">Delete</button>
+                                                            ` : ''}
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Submission Area for Assigned User -->
+                                                    ${isAssignedToMe ? `
+                                                        <div style="background:#111827; border:1px solid #1f2937; padding:8px; border-radius:6px; margin-top:4px;">
+                                                            <label style="margin-bottom:4px; color:#60a5fa;">Your Submission:</label>
+                                                            ${isPubMatArtist ? `
+                                                                <div style="font-size:11px; color:#d1d5db; margin-bottom:6px;">
+                                                                    As a PubMat Artist, please open the <a href="https://drive.google.com/drive/folders/1LUc27TF7zExN6MyLOVJw8ZSG_Q4b7Gwu" target="_blank" style="color:#60a5fa; text-decoration:underline;">Google Drive Folder</a> to upload your photo, then paste your submission notes below:
+                                                                </div>
+                                                            ` : ''}
+                                                            <textarea id="sub-text-${t.id}" rows="2" placeholder="Type your text submission or link here..." style="margin-bottom:6px;">${t.submission || ''}</textarea>
+                                                            <button onclick="submitTaskWork(${t.id})" class="action-btn" style="background:#2563eb; color:#fff; padding:6px 12px;">Submit Work</button>
+                                                        </div>
+                                                    ` : t.submission ? `
+                                                        <div style="font-size:10px; color:#9ca3af; background:#111827; padding:6px; border-radius:4px;">
+                                                            <b>Submission:</b> ${t.submission}
+                                                        </div>
+                                                    ` : ''}
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
                                 </div>
+
+                                <!-- Month Calendar View -->
+                                ${renderCalendar()}
                             </div>
 
-                            <!-- Month Calendar View -->
-                            ${renderCalendar()}
-                        </div>
-
-                        <!-- Right Column: SMM-Only Roster & Multi-Role Manager -->
-                        <div>
-                            ${isSMM ? `
-                                <div class="panel">
-                                    <h2>Team Members Roster</h2>
-                                    <div style="display:flex; flex-direction:column; gap:8px;">
-                                        ${state.users.map(u => `
-                                            <div class="roster-item">
-                                                <div style="display:flex; justify-content:space-between; align-items:center;">
-                                                    <span style="font-weight:600; font-size:12px;">${u.username}</span>
-                                                </div>
-                                                <div style="display:flex; flex-wrap:wrap; gap:4px;">
-                                                    ${(u.roles || []).map(r => `
-                                                        <span class="role-tag">
-                                                            ${r}
-                                                            ${u.roles.length > 1 ? `<button onclick="removeUserRole(${u.id}, '${r}')">&times;</button>` : ''}
-                                                        </span>
-                                                    `).join('')}
-                                                </div>
-                                                ${(u.roles || []).length < 2 ? `
-                                                    <div style="display:flex; gap:6px; margin-top:2px;">
-                                                        <select id="add-role-${u.id}" style="padding:4px; font-size:10px;">
-                                                            <option value="">+ Add second role...</option>
-                                                            ${ROLES.filter(r => !(u.roles || []).includes(r)).map(r => `<option value="${r}">${r}</option>`).join('')}
-                                                        </select>
-                                                        <button onclick="const sel = document.getElementById('add-role-${u.id}'); if(sel.value) addUserRole(${u.id}, sel.value);" style="background:#2563eb; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-size:10px; cursor:pointer;">Add</button>
+                            <!-- Right Column: SMM-Only Roster & Multi-Role Manager -->
+                            <div>
+                                ${isSMM ? `
+                                    <div class="panel">
+                                        <h2>Team Members Roster</h2>
+                                        <div style="display:flex; flex-direction:column; gap:8px;">
+                                            ${state.users.map(u => `
+                                                <div class="roster-item">
+                                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                                        <span style="font-weight:600; font-size:12px;">${u.username}</span>
                                                     </div>
-                                                ` : `<span style="font-size:9px; color:#6b7280; font-style:italic;">Max 2 roles reached</span>`}
-                                            </div>
-                                        `).join('')}
+                                                    <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                                                        ${(u.roles || []).map(r => `
+                                                            <span class="role-tag">
+                                                                ${r}
+                                                                ${u.roles.length > 1 ? `<button onclick="removeUserRole(${u.id}, '${r}')">&times;</button>` : ''}
+                                                            </span>
+                                                        `).join('')}
+                                                    </div>
+                                                    ${(u.roles || []).length < 2 ? `
+                                                        <div style="display:flex; gap:6px; margin-top:2px;">
+                                                            <select id="add-role-${u.id}" style="padding:4px; font-size:10px;">
+                                                                <option value="">+ Add second role...</option>
+                                                                ${ROLES.filter(r => !(u.roles || []).includes(r)).map(r => `<option value="${r}">${r}</option>`).join('')}
+                                                            </select>
+                                                            <button onclick="const sel = document.getElementById('add-role-${u.id}'); if(sel.value) addUserRole(${u.id}, sel.value);" style="background:#2563eb; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-size:10px; cursor:pointer;">Add</button>
+                                                        </div>
+                                                    ` : `<span style="font-size:9px; color:#6b7280; font-style:italic;">Max 2 roles reached</span>`}
+                                                </div>
+                                            `).join('')}
+                                        </div>
                                     </div>
-                                </div>
-                            ` : `
-                                <div class="panel" style="text-align:center;">
-                                    <h2>Workspace Access</h2>
-                                    <p style="font-size:11px; color:#9ca3af;">Member directory and role administration are strictly restricted to the Social Media Manager.</p>
-                                </div>
-                            `}
-                        </div>
-                    </main>
+                                ` : `
+                                    <div class="panel" style="text-align:center;">
+                                        <h2>Workspace Access</h2>
+                                        <p style="font-size:11px; color:#9ca3af;">Member directory and role administration are strictly restricted to the Social Media Manager.</p>
+                                    </div>
+                                `}
+                            </div>
+                        </main>
+                    `}
                 `;
             }
         }
