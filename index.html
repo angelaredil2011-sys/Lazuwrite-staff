@@ -15,7 +15,9 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col p-3 sm:p-6">
 
-    <div id="app" class="w-full flex-1 flex flex-col items-center justify-center"></div>
+    <div id="app" class="w-full flex-1 flex flex-col items-center justify-center">
+        <div class="text-slate-400 text-sm animate-pulse">Loading LazuWrite...</div>
+    </div>
 
     <script>
         // Supabase Configuration
@@ -24,15 +26,121 @@
         let supabaseClient = null;
 
         try {
-            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            if (window.supabase) {
+                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            }
         } catch (e) {
             console.error('Supabase init error:', e);
         }
 
         let state = {
             currentUser: null,
-            users: [],
-            tasks: [],
+            users: JSON.parse(localStorage.getItem('lazu_users') || '[]'),
+            tasks: JSON.parse(localStorage.getItem('lazu_tasks') || '[]'),
             authTab: 'login',
             currentMonth: new Date().getMonth(),
-            currentYear:
+            currentYear: new Date().getFullYear()
+        };
+
+        const ROLES = [
+            'Social Media Manager',
+            'Chief Caption Writer',
+            'Chief PubMat Artist',
+            'Chief Text Formatter',
+            'Caption Writer',
+            'PubMat Artist',
+            'Text Formatter'
+        ];
+
+        const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+        async function init() {
+            // Load session instantly
+            const saved = sessionStorage.getItem('lazu_session');
+            if (saved) {
+                try {
+                    state.currentUser = JSON.parse(saved);
+                } catch (e) {
+                    sessionStorage.removeItem('lazu_session');
+                }
+            }
+
+            // Render UI immediately so screen never hangs
+            render();
+
+            // Fetch data from Supabase in background
+            if (supabaseClient) {
+                await fetchAppData();
+                setupRealtimeSync();
+            }
+
+            // Periodic minute check for deadline reminder updates
+            setInterval(render, 60000);
+        }
+
+        async function fetchAppData() {
+            if (!supabaseClient) return;
+            try {
+                const { data, error } = await supabaseClient
+                    .from('app_state')
+                    .select('*')
+                    .eq('id', 1)
+                    .single();
+
+                if (data && data.payload) {
+                    state.users = (data.payload.users || []).map(u => ({
+                        ...u,
+                        roles: u.roles || [u.role || 'Caption Writer']
+                    }));
+                    state.tasks = data.payload.tasks || [];
+                    
+                    // Backup locally
+                    localStorage.setItem('lazu_users', JSON.stringify(state.users));
+                    localStorage.setItem('lazu_tasks', JSON.stringify(state.tasks));
+
+                    if (state.currentUser) {
+                        const upToDateUser = state.users.find(u => u.username === state.currentUser.username);
+                        if (upToDateUser) {
+                            state.currentUser = upToDateUser;
+                            sessionStorage.setItem('lazu_session', JSON.stringify(upToDateUser));
+                        }
+                    }
+                    render();
+                }
+            } catch (err) {
+                console.error('Background fetch notice (using local cache):', err);
+            }
+        }
+
+        async function saveAppData() {
+            // Always save locally first for instant reliability
+            localStorage.setItem('lazu_users', JSON.stringify(state.users));
+            localStorage.setItem('lazu_tasks', JSON.stringify(state.tasks));
+
+            if (!supabaseClient) return;
+            try {
+                const payload = {
+                    users: state.users,
+                    tasks: state.tasks
+                };
+                await supabaseClient.from('app_state').upsert({ id: 1, payload: payload });
+            } catch (err) {
+                console.error('Supabase save error:', err);
+            }
+        }
+
+        function setupRealtimeSync() {
+            if (!supabaseClient) return;
+            try {
+                supabaseClient
+                    .channel('public:app_state')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_state' }, payload => {
+                        if (payload.new && payload.new.payload) {
+                            state.users = (payload.new.payload.users || []).map(u => ({
+                                ...u,
+                                roles: u.roles || [u.role || 'Caption Writer']
+                            }));
+                            state.tasks = payload.new.payload.tasks || [];
+                            
+                            localStorage.setItem('lazu_users', JSON.stringify(state.users));
+                            localStorage
