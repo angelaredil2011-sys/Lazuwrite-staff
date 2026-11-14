@@ -50,6 +50,9 @@
         .action-btn:hover { background: #374151; color: #fff; }
         .action-btn.del:hover { background: #7f1d1d; color: #fca5a5; }
 
+        .preset-btn { background: #1e293b; color: #93c5fd; border: 1px solid #334155; padding: 4px 8px; border-radius: 6px; font-size: 10px; cursor: pointer; font-weight: 500; }
+        .preset-btn:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; }
         .cal-header { font-size: 10px; font-weight: 600; color: #6b7280; padding-bottom: 4px; }
         .cal-cell { background: #030712; border: 1px solid #1f2937; border-radius: 6px; min-height: 60px; padding: 3px; display: flex; flex-direction: column; justify-content: space-between; text-align: left; }
@@ -86,9 +89,6 @@
 
         const ROLES = [
             'Social Media Manager',
-            'Make Pubmat',
-            'Make Caption',
-            'Edit caption',
             'Chief Caption Writer',
             'Chief PubMat Artist',
             'Chief Text Formatter',
@@ -260,6 +260,11 @@
         function setView(view) {
             state.currentView = view;
             render();
+        }
+
+        function setTaskPreset(text) {
+            const input = document.getElementById('task-title');
+            if (input) input.value = text;
         }
 
         async function handleTaskSubmit(e) {
@@ -492,7 +497,7 @@
                 `;
             } else {
                 const isSMM = state.currentUser.roles && state.currentUser.roles.includes('Social Media Manager');
-                const isPubMatRole = state.currentUser.roles && state.currentUser.roles.some(r => r.includes('PubMat'));
+                const isPubMatArtist = state.currentUser.roles && state.currentUser.roles.some(r => r.includes('PubMat Artist'));
                 const editingTask = state.editingTaskId ? state.tasks.find(t => t.id === state.editingTaskId) : null;
 
                 app.className = "dashboard";
@@ -541,7 +546,13 @@
                                             ${editingTask ? `<button onclick="cancelEdit()" class="logout-btn" style="background:#7f1d1d; color:#fca5a5;">Cancel Edit</button>` : ''}
                                         </div>
                                         <form onsubmit="handleTaskSubmit(event)" style="display:flex; flex-direction:column; gap:8px;">
-                                            <input type="text" id="task-title" required value="${editingTask ? editingTask.title : ''}" placeholder="Task description (e.g. Publish Promo PubMat)">
+                                            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom: 2px;">
+                                                <span style="font-size:10px; color:#9ca3af; align-self:center;">Presets:</span>
+                                                <button type="button" onclick="setTaskPreset('Make Pubmat')" class="preset-btn">+ Make Pubmat</button>
+                                                <button type="button" onclick="setTaskPreset('Make Caption')" class="preset-btn">+ Make Caption</button>
+                                                <button type="button" onclick="setTaskPreset('Edit caption')" class="preset-btn">+ Edit caption</button>
+                                            </div>
+                                            <input type="text" id="task-title" required value="${editingTask ? editingTask.title : ''}" placeholder="Task description or select a preset above">
                                             <div style="display:grid; grid-template-columns: 1fr; gap:8px;">
                                                 <select id="task-assignee">
                                                     ${state.users.map(u => `<option value="${u.username}" ${editingTask && editingTask.assignee === u.username ? 'selected' : ''}>${u.username} (${(u.roles || []).join(', ')})</option>`).join('')}
@@ -587,9 +598,9 @@
                                                     ${isAssignedToMe ? `
                                                         <div style="background:#111827; border:1px solid #1f2937; padding:8px; border-radius:6px; margin-top:4px;">
                                                             <label style="margin-bottom:4px; color:#60a5fa;">Your Submission:</label>
-                                                            ${isPubMatRole ? `
+                                                            ${isPubMatArtist ? `
                                                                 <div style="font-size:11px; color:#d1d5db; margin-bottom:6px;">
-                                                                    As a PubMat creator, please open the <a href="https://drive.google.com/drive/folders/1LUc27TF7zExN6MyLOVJw8ZSG_Q4b7Gwu" target="_blank" style="color:#60a5fa; text-decoration:underline;">Google Drive Folder</a> to upload your photo, then paste your submission notes below:
+                                                                    As a PubMat Artist, please open the <a href="https://drive.google.com/drive/folders/1LUc27TF7zExN6MyLOVJw8ZSG_Q4b7Gwu" target="_blank" style="color:#60a5fa; text-decoration:underline;">Google Drive Folder</a> to upload your photo, then paste your submission notes below:
                                                                 </div>
                                                             ` : ''}
                                                             <textarea id="sub-text-${t.id}" rows="2" placeholder="Type your text submission or link here..." style="margin-bottom:6px;">${t.submission || ''}</textarea>
