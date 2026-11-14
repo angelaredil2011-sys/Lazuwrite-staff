@@ -10,7 +10,6 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         body { background-color: #030712; color: #f3f4f6; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 12px; }
         
-        /* Auth Card */
         .auth-container { width: 100%; min-height: 90vh; display: flex; align-items: center; justify-content: center; }
         .card { background-color: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 24px; width: 100%; max-width: 380px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
         h1 { font-size: 24px; font-weight: bold; text-align: center; background: linear-gradient(to right, #60a5fa, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 4px; }
@@ -20,12 +19,11 @@
         .tab-btn.active { background: #2563eb; color: #ffffff; }
         .form-group { margin-bottom: 12px; }
         label { display: block; font-size: 10px; font-weight: 600; text-transform: uppercase; color: #9ca3af; margin-bottom: 4px; }
-        input, select { width: 100%; background: #030712; border: 1px solid #1f2937; border-radius: 8px; padding: 10px; color: #f3f4f6; font-size: 13px; outline: none; }
-        input:focus, select:focus { border-color: #3b82f6; }
+        input, select, textarea { width: 100%; background: #030712; border: 1px solid #1f2937; border-radius: 8px; padding: 10px; color: #f3f4f6; font-size: 13px; outline: none; }
+        input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
         button.submit-btn { width: 100%; background: #2563eb; color: #ffffff; font-weight: 600; padding: 11px; border: none; border-radius: 8px; cursor: pointer; margin-top: 4px; font-size: 13px; }
         button.submit-btn:hover { background: #1d4ed8; }
 
-        /* Dashboard Layout */
         .dashboard { width: 100%; max-width: 1300px; flex: 1; display: flex; flex-direction: column; margin: 0 auto; }
         header { background: #111827; border: 1px solid #1f2937; padding: 14px 18px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
         .logout-btn { background: #1f2937; color: #d1d5db; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 11px; }
@@ -45,12 +43,10 @@
         .badge-amber { background: #451a03; color: #fbbf24; border: 1px solid #78350f; padding: 2px 6px; border-radius: 99px; font-size: 9px; font-weight: 600; }
         .badge-blue { background: #172554; color: #93c5fd; border: 1px solid #1e40af; padding: 2px 6px; border-radius: 99px; font-size: 9px; font-weight: 600; }
 
-        /* Action buttons for task editing/deleting */
         .action-btn { background: #1f2937; color: #9ca3af; border: none; padding: 5px 8px; border-radius: 6px; font-size: 10px; cursor: pointer; font-weight: 600; }
         .action-btn:hover { background: #374151; color: #fff; }
         .action-btn.del:hover { background: #7f1d1d; color: #fca5a5; }
 
-        /* Calendar grid scaling */
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; }
         .cal-header { font-size: 10px; font-weight: 600; color: #6b7280; padding-bottom: 4px; }
         .cal-cell { background: #030712; border: 1px solid #1f2937; border-radius: 6px; min-height: 60px; padding: 3px; display: flex; flex-direction: column; justify-content: space-between; text-align: left; }
@@ -62,7 +58,6 @@
     <div id="app" style="width: 100%;"></div>
 
     <script>
-        // Supabase Configuration
         const SUPABASE_URL = 'https://ulmwwuvvioihhosyfflp.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_pM7zmfoy7UHnwAY6Wii7mQ_zBBObH-V';
         let supabaseClient = null;
@@ -118,7 +113,7 @@
         async function fetchAppData() {
             if (!supabaseClient) return;
             try {
-                const { data, error } = await supabaseClient
+                const { data } = await supabaseClient
                     .from('app_state')
                     .select('*')
                     .eq('id', 1)
@@ -252,6 +247,12 @@
 
         async function handleTaskSubmit(e) {
             e.preventDefault();
+            const isSMM = state.currentUser.roles && state.currentUser.roles.includes('Social Media Manager');
+            if (!isSMM) {
+                alert('Permission denied: Only the Social Media Manager can create or assign deadlines.');
+                return;
+            }
+
             const title = document.getElementById('task-title').value.trim();
             const assignee = document.getElementById('task-assignee').value;
             const deadline = document.getElementById('task-deadline').value;
@@ -259,14 +260,6 @@
             if (!title || !deadline) return;
 
             if (state.editingTaskId) {
-                // Edit mode requires password qw confirmation
-                const pin = prompt('Enter confirmation password (qw) to edit this schedule:');
-                if (pin === null) return; // Cancelled
-                if (pin !== 'qw') {
-                    alert('Incorrect password! Edit canceled.');
-                    return;
-                }
-
                 const task = state.tasks.find(t => t.id === state.editingTaskId);
                 if (task) {
                     task.title = title;
@@ -275,8 +268,14 @@
                 }
                 state.editingTaskId = null;
             } else {
-                // Create new task
-                state.tasks.push({ id: Date.now(), title, assignee, deadline, status: 'Pending' });
+                state.tasks.push({ 
+                    id: Date.now(), 
+                    title, 
+                    assignee, 
+                    deadline, 
+                    status: 'Pending',
+                    submission: '' 
+                });
             }
 
             await saveAppData();
@@ -284,10 +283,9 @@
         }
 
         function startEditTask(taskId) {
-            const pin = prompt('Enter confirmation password (qw) to edit this schedule:');
-            if (pin === null) return;
-            if (pin !== 'qw') {
-                alert('Incorrect password!');
+            const isSMM = state.currentUser.roles && state.currentUser.roles.includes('Social Media Manager');
+            if (!isSMM) {
+                alert('Permission denied: Only the Social Media Manager can edit schedules.');
                 return;
             }
             state.editingTaskId = taskId;
@@ -300,12 +298,13 @@
         }
 
         async function deleteTask(taskId) {
-            const pin = prompt('Enter confirmation password (qw) to delete this schedule:');
-            if (pin === null) return;
-            if (pin !== 'qw') {
-                alert('Incorrect password! Deletion canceled.');
+            const isSMM = state.currentUser.roles && state.currentUser.roles.includes('Social Media Manager');
+            if (!isSMM) {
+                alert('Permission denied: Only the Social Media Manager can delete schedules.');
                 return;
             }
+
+            if (!confirm('Are you sure you want to delete this schedule?')) return;
 
             state.tasks = state.tasks.filter(t => t.id !== taskId);
             if (state.editingTaskId === taskId) state.editingTaskId = null;
@@ -318,6 +317,18 @@
             if (task) {
                 task.status = status;
                 await saveAppData();
+                render();
+            }
+        }
+
+        async function submitTaskWork(taskId) {
+            const submissionText = document.getElementById(`sub-text-${taskId}`).value.trim();
+            const task = state.tasks.find(t => t.id === taskId);
+            if (task) {
+                task.submission = submissionText;
+                task.status = 'Completed';
+                await saveAppData();
+                alert('Work submitted successfully!');
                 render();
             }
         }
@@ -440,6 +451,7 @@
                 `;
             } else {
                 const isSMM = state.currentUser.roles && state.currentUser.roles.includes('Social Media Manager');
+                const isPubMatArtist = state.currentUser.roles && state.currentUser.roles.some(r => r.includes('PubMat Artist'));
                 const editingTask = state.editingTaskId ? state.tasks.find(t => t.id === state.editingTaskId) : null;
 
                 app.className = "dashboard";
@@ -456,49 +468,76 @@
                     </header>
                     <main class="grid">
                         <div style="display:flex; flex-direction:column; gap:16px;">
-                            <!-- Task Assignment / Edit Form -->
-                            <div class="panel" style="${editingTask ? 'border-color: #2563eb;' : ''}">
-                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
-                                    <h2 style="margin:0;">${editingTask ? 'Edit Task Schedule' : 'Assign Task & Set Deadline'}</h2>
-                                    ${editingTask ? `<button onclick="cancelEdit()" class="logout-btn" style="background:#7f1d1d; color:#fca5a5;">Cancel Edit</button>` : ''}
-                                </div>
-                                <form onsubmit="handleTaskSubmit(event)" style="display:flex; flex-direction:column; gap:8px;">
-                                    <input type="text" id="task-title" required value="${editingTask ? editingTask.title : ''}" placeholder="Task description (e.g. Publish Promo PubMat)">
-                                    <div style="display:grid; grid-template-columns: 1fr; gap:8px;">
-                                        <select id="task-assignee">
-                                            ${state.users.map(u => `<option value="${u.username}" ${editingTask && editingTask.assignee === u.username ? 'selected' : ''}>${u.username} (${(u.roles || []).join(', ')})</option>`).join('')}
-                                        </select>
-                                        <input type="datetime-local" id="task-deadline" required value="${editingTask ? editingTask.deadline : ''}">
+                            <!-- SMM-Only Task Assignment / Edit Form -->
+                            ${isSMM ? `
+                                <div class="panel" style="${editingTask ? 'border-color: #2563eb;' : ''}">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                                        <h2 style="margin:0;">${editingTask ? 'Edit Task Schedule' : 'Assign Task & Set Deadline'}</h2>
+                                        ${editingTask ? `<button onclick="cancelEdit()" class="logout-btn" style="background:#7f1d1d; color:#fca5a5;">Cancel Edit</button>` : ''}
                                     </div>
-                                    <button type="submit" class="submit-btn" style="${editingTask ? 'background:#059669;' : ''}">${editingTask ? 'Save Changes (Requires qw)' : 'Publish & Assign Task'}</button>
-                                </form>
-                            </div>
+                                    <form onsubmit="handleTaskSubmit(event)" style="display:flex; flex-direction:column; gap:8px;">
+                                        <input type="text" id="task-title" required value="${editingTask ? editingTask.title : ''}" placeholder="Task description (e.g. Publish Promo PubMat)">
+                                        <div style="display:grid; grid-template-columns: 1fr; gap:8px;">
+                                            <select id="task-assignee">
+                                                ${state.users.map(u => `<option value="${u.username}" ${editingTask && editingTask.assignee === u.username ? 'selected' : ''}>${u.username} (${(u.roles || []).join(', ')})</option>`).join('')}
+                                            </select>
+                                            <input type="datetime-local" id="task-deadline" required value="${editingTask ? editingTask.deadline : ''}">
+                                        </div>
+                                        <button type="submit" class="submit-btn" style="${editingTask ? 'background:#059669;' : ''}">${editingTask ? 'Save Changes' : 'Publish & Assign Task'}</button>
+                                    </form>
+                                </div>
+                            ` : ''}
 
-                            <!-- Tasks List & Reminders -->
+                            <!-- Tasks List & Submissions -->
                             <div class="panel">
                                 <h2>Active Team Tasks & Deadlines</h2>
-                                <div style="display:flex; flex-direction:column; gap:8px;">
+                                <div style="display:flex; flex-direction:column; gap:12px;">
                                     ${state.tasks.length === 0 ? `<p style="color:#6b7280; font-size:11px;">No tasks assigned yet.</p>` : ''}
-                                    ${state.tasks.map(t => `
-                                        <div style="background:#030712; border:1px solid #1f2937; padding:10px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-                                            <div style="flex: 1; min-width: 180px;">
-                                                <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px; flex-wrap:wrap;">
-                                                    <span style="font-weight:600; font-size:12px;">${t.title}</span>
-                                                    ${getReminderBadge(t.deadline)}
+                                    ${state.tasks.map(t => {
+                                        const isAssignedToMe = t.assignee === state.currentUser.username;
+                                        return `
+                                            <div style="background:#030712; border:1px solid #1f2937; padding:12px; border-radius:8px; display:flex; flex-direction:column; gap:8px;">
+                                                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap;">
+                                                    <div style="flex: 1; min-width: 180px;">
+                                                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px; flex-wrap:wrap;">
+                                                            <span style="font-weight:600; font-size:13px;">${t.title}</span>
+                                                            ${getReminderBadge(t.deadline)}
+                                                        </div>
+                                                        <span style="font-size:10px; color:#9ca3af;">Assigned to: <b style="color:#60a5fa">${t.assignee}</b> &bull; Due: ${new Date(t.deadline).toLocaleString()}</span>
+                                                    </div>
+                                                    <div style="display:flex; align-items:center; gap:6px;">
+                                                        <select onchange="updateTaskStatus(${t.id}, this.value)" style="width:auto; padding:5px; font-size:11px;">
+                                                            <option value="Pending" ${t.status === 'Pending' ? 'selected' : ''}>Pending</option>
+                                                            <option value="In Progress" ${t.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                                                            <option value="Completed" ${t.status === 'Completed' ? 'selected' : ''}>Completed</option>
+                                                        </select>
+                                                        ${isSMM ? `
+                                                            <button onclick="startEditTask(${t.id})" class="action-btn">Edit</button>
+                                                            <button onclick="deleteTask(${t.id})" class="action-btn del">Delete</button>
+                                                        ` : ''}
+                                                    </div>
                                                 </div>
-                                                <span style="font-size:10px; color:#9ca3af;">Assigned to: <b style="color:#60a5fa">${t.assignee}</b> &bull; Due: ${new Date(t.deadline).toLocaleString()}</span>
+
+                                                <!-- Submission Area for Assigned User -->
+                                                ${isAssignedToMe ? `
+                                                    <div style="background:#111827; border:1px solid #1f2937; padding:8px; border-radius:6px; margin-top:4px;">
+                                                        <label style="margin-bottom:4px; color:#60a5fa;">Your Submission:</label>
+                                                        ${isPubMatArtist ? `
+                                                            <div style="font-size:11px; color:#d1d5db; margin-bottom:6px;">
+                                                                As a PubMat Artist, please open the <a href="https://drive.google.com/drive/folders/1LUc27TF7zExN6MyLOVJw8ZSG_Q4b7Gwu" target="_blank" style="color:#60a5fa; text-decoration:underline;">Google Drive Folder</a> to upload your photo, then paste your submission notes below:
+                                                            </div>
+                                                        ` : ''}
+                                                        <textarea id="sub-text-${t.id}" rows="2" placeholder="Type your text submission or link here..." style="margin-bottom:6px;">${t.submission || ''}</textarea>
+                                                        <button onclick="submitTaskWork(${t.id})" class="action-btn" style="background:#2563eb; color:#fff; padding:6px 12px;">Submit Work</button>
+                                                    </div>
+                                                ` : t.submission ? `
+                                                    <div style="font-size:10px; color:#9ca3af; background:#111827; padding:6px; border-radius:4px;">
+                                                        <b>Submission:</b> ${t.submission}
+                                                    </div>
+                                                ` : ''}
                                             </div>
-                                            <div style="display:flex; align-items:center; gap:6px;">
-                                                <select onchange="updateTaskStatus(${t.id}, this.value)" style="width:auto; padding:5px; font-size:11px;">
-                                                    <option value="Pending" ${t.status === 'Pending' ? 'selected' : ''}>Pending</option>
-                                                    <option value="In Progress" ${t.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
-                                                    <option value="Completed" ${t.status === 'Completed' ? 'selected' : ''}>Completed</option>
-                                                </select>
-                                                <button onclick="startEditTask(${t.id})" class="action-btn">Edit</button>
-                                                <button onclick="deleteTask(${t.id})" class="action-btn del">Delete</button>
-                                            </div>
-                                        </div>
-                                    `).join('')}
+                                        `;
+                                    }).join('')}
                                 </div>
                             </div>
 
