@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LazuWrite - Team Coordination</title>
+    <!-- Tailwind CSS for modern styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JavaScript SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+
+    <!-- App Container -->
+    <div id="app" class="flex-1 flex flex-col">
+        <!-- Dynamic content renders here -->
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        // Supabase Configuration
+        const SUPABASE_URL = 'https://ulmwwuvvioihhosyfflp.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_pM7zmfoy7UHnwAY6Wii7mQ_zBBObH-V';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // State Management
+        let state = {
+            currentUser: null,
+            users: [],
+            tasks: [],
+            notifications: [],
+            authTab: 'login' // 'login' or 'register'
+        };
