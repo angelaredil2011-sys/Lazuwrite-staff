@@ -276,32 +276,34 @@
             }
 
             const title = document.getElementById('task-title').value.trim();
-            const taskType = document.getElementById('task-type').value;
             const instructions = document.getElementById('task-instructions').value.trim();
             const deadline = document.getElementById('task-deadline').value;
 
             if (!title || !deadline) return;
 
             if (state.editingTaskId) {
-                const task = state.tasks.find(t => t.id === state.editingTaskId);
-                if (task) {
-                    task.title = title;
-                    task.taskType = taskType;
-                    task.instructions = instructions;
-                    task.deadline = deadline;
+                const group = state.tasks.find(t => t.id === state.editingTaskId);
+                if (group) {
+                    group.title = title;
+                    group.instructions = instructions;
+                    group.deadline = deadline;
+                    group.subtasks.forEach(st => st.deadline = deadline);
                 }
                 state.editingTaskId = null;
             } else {
-                state.tasks.push({ 
-                    id: Date.now(), 
-                    title, 
-                    taskType,
+                const groupId = Date.now();
+                const subtasks = [
+                    { id: groupId + 1, taskType: 'Make Pubmat', assignee: 'Unassigned', submission: '', reviewStatus: 'Pending Assignment', status: 'Pending' },
+                    { id: groupId + 2, taskType: 'Make Caption', assignee: 'Unassigned', submission: '', reviewStatus: 'Pending Assignment', status: 'Pending' },
+                    { id: groupId + 3, taskType: 'Edit caption', assignee: 'Unassigned', submission: '', reviewStatus: 'Pending Assignment', status: 'Pending' }
+                ];
+
+                state.tasks.push({
+                    id: groupId,
+                    title,
                     instructions,
-                    assignee: 'Unassigned', 
-                    deadline, 
-                    status: 'Pending',
-                    submission: '',
-                    reviewStatus: 'Pending Assignment' 
+                    deadline,
+                    subtasks
                 });
             }
 
@@ -309,15 +311,18 @@
             render();
         }
 
-        async function assignTaskMember(taskId) {
-            const assignee = document.getElementById(`assignee-select-${taskId}`).value;
-            const task = state.tasks.find(t => t.id === taskId);
-            if (task) {
-                task.assignee = assignee;
-                task.reviewStatus = 'Pending Review';
-                await saveAppData();
-                alert(`Task successfully assigned to ${assignee}!`);
-                render();
+        async function assignSubtask(groupId, subtaskId) {
+            const assignee = document.getElementById(`assignee-select-${subtaskId}`).value;
+            const group = state.tasks.find(t => t.id === groupId);
+            if (group) {
+                const st = group.subtasks.find(s => s.id === subtaskId);
+                if (st) {
+                    st.assignee = assignee;
+                    st.reviewStatus = 'Pending Review';
+                    await saveAppData();
+                    alert(`Assigned to ${assignee} successfully!`);
+                    render();
+                }
             }
         }
 
@@ -343,7 +348,7 @@
                 return;
             }
 
-            if (!confirm('Are you sure you want to delete this schedule?')) return;
+            if (!confirm('Are you sure you want to delete this deadline and its 3 categories?')) return;
 
             state.tasks = state.tasks.filter(t => t.id !== taskId);
             if (state.editingTaskId === taskId) state.editingTaskId = null;
@@ -351,50 +356,58 @@
             render();
         }
 
-        async function updateTaskStatus(taskId, status) {
-            const task = state.tasks.find(t => t.id === taskId);
-            if (task) {
-                task.status = status;
-                await saveAppData();
-                render();
+        async function updateSubtaskStatus(groupId, subtaskId, status) {
+            const group = state.tasks.find(t => t.id === groupId);
+            if (group) {
+                const st = group.subtasks.find(s => s.id === subtaskId);
+                if (st) {
+                    st.status = status;
+                    await saveAppData();
+                    render();
+                }
             }
         }
 
-        async function submitTaskWork(taskId) {
-            const submissionText = document.getElementById(`sub-text-${taskId}`).value.trim();
-            const task = state.tasks.find(t => t.id === taskId);
-            if (task) {
-                task.submission = submissionText;
-                task.status = 'In Progress';
-                task.reviewStatus = 'Pending Review';
-                await saveAppData();
-                alert('Work submitted for review!');
-                render();
+        async function submitSubtaskWork(groupId, subtaskId) {
+            const submissionText = document.getElementById(`sub-text-${subtaskId}`).value.trim();
+            const group = state.tasks.find(t => t.id === groupId);
+            if (group) {
+                const st = group.subtasks.find(s => s.id === subtaskId);
+                if (st) {
+                    st.submission = submissionText;
+                    st.status = 'In Progress';
+                    st.reviewStatus = 'Pending Review';
+                    await saveAppData();
+                    alert('Work submitted for review!');
+                    render();
+                }
             }
         }
 
-        async function reviewTask(taskId, verdict) {
-            const task = state.tasks.find(t => t.id === taskId);
-            if (!task) return;
+        async function reviewSubtask(groupId, subtaskId, verdict) {
+            const group = state.tasks.find(t => t.id === groupId);
+            if (!group) return;
+            const st = group.subtasks.find(s => s.id === subtaskId);
+            if (!st) return;
 
             const isSMM = state.currentUser.roles && state.currentUser.roles.includes('Social Media Manager');
 
             if (verdict === 'approve') {
-                if (isSMM || task.reviewStatus === 'Chief Approved') {
-                    task.reviewStatus = 'SMM Approved';
-                    task.status = 'Completed';
+                if (isSMM || st.reviewStatus === 'Chief Approved') {
+                    st.reviewStatus = 'SMM Approved';
+                    st.status = 'Completed';
                     alert('Final approval granted by SMM!');
                 } else {
-                    task.reviewStatus = 'Chief Approved';
-                    task.status = 'In Progress';
+                    st.reviewStatus = 'Chief Approved';
+                    st.status = 'In Progress';
                     alert('Chief approved! Forwarded to SMM for final approval.');
                 }
             } else if (verdict === 'revision') {
                 const notes = prompt('Enter revision feedback/notes for the member:');
                 if (notes === null) return;
-                task.reviewStatus = 'Needs Revision';
-                task.status = 'Pending';
-                task.revisionNotes = notes;
+                st.reviewStatus = 'Needs Revision';
+                st.status = 'Pending';
+                st.revisionNotes = notes;
                 alert('Revision requested.');
             }
             await saveAppData();
@@ -487,7 +500,7 @@
                     <div class="cal-cell">
                         <span class="cal-day-num">${day}</span>
                         <div style="overflow-y:auto; max-height:45px;">
-                            ${dayTasks.map(t => `<div style="background:#172554; color:#93c5fd; padding:1px 3px; border-radius:3px; font-size:8px; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${t.title} (${t.assignee})"><b>${t.assignee}:</b> ${t.title}</div>`).join('')}
+                            ${dayTasks.map(t => `<div style="background:#172554; color:#93c5fd; padding:1px 3px; border-radius:3px; font-size:8px; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${t.title}"><b>Deadline:</b> ${t.title}</div>`).join('')}
                         </div>
                     </div>
                 `;
@@ -588,147 +601,151 @@
                     ` : `
                         <main class="grid">
                             <div style="display:flex; flex-direction:column; gap:16px;">
-                                <!-- SMM-Only Deadline & Task Form -->
+                                <!-- SMM-Only Deadline Form (1 deadline, 3 categories) -->
                                 ${isSMM ? `
                                     <div class="panel" style="${editingTask ? 'border-color: #2563eb;' : ''}">
                                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
-                                            <h2 style="margin:0;">${editingTask ? 'Edit Task Deadline' : 'Set Task Deadline & Instructions'}</h2>
+                                            <h2 style="margin:0;">${editingTask ? 'Edit Task Deadline' : 'Set Master Deadline (Includes 3 Categories)'}</h2>
                                             ${editingTask ? `<button onclick="cancelEdit()" class="logout-btn" style="background:#7f1d1d; color:#fca5a5;">Cancel Edit</button>` : ''}
                                         </div>
                                         <form onsubmit="handleTaskSubmit(event)" style="display:flex; flex-direction:column; gap:10px;">
                                             <div>
-                                                <label>Task Title / Topic</label>
+                                                <label>Task Title / Campaign Topic</label>
                                                 <input type="text" id="task-title" required value="${editingTask ? editingTask.title : ''}" placeholder="e.g. FB Promo Campaign">
                                             </div>
                                             <div>
-                                                <label>Task Type</label>
-                                                <select id="task-type">
-                                                    <option value="Make Pubmat" ${editingTask && editingTask.taskType === 'Make Pubmat' ? 'selected' : ''}>Make Pubmat (Chief PubMat Artist)</option>
-                                                    <option value="Make Caption" ${editingTask && editingTask.taskType === 'Make Caption' ? 'selected' : ''}>Make Caption (Chief Caption Writer)</option>
-                                                    <option value="Edit caption" ${editingTask && editingTask.taskType === 'Edit caption' ? 'selected' : ''}>Edit caption (Chief Text Formatter)</option>
-                                                </select>
+                                                <label>Master Instructions / Details</label>
+                                                <textarea id="task-instructions" rows="2" placeholder="Provide overall instructions for this deadline...">${editingTask ? (editingTask.instructions || '') : ''}</textarea>
                                             </div>
                                             <div>
-                                                <label>Specific Instructions / Details</label>
-                                                <textarea id="task-instructions" rows="2" placeholder="Provide detailed instructions for this task...">${editingTask ? (editingTask.instructions || '') : ''}</textarea>
-                                            </div>
-                                            <div>
-                                                <label>Deadline</label>
+                                                <label>Master Deadline (Date & Time)</label>
                                                 <input type="datetime-local" id="task-deadline" required value="${editingTask ? editingTask.deadline : ''}">
                                             </div>
-                                            <button type="submit" class="submit-btn" style="${editingTask ? 'background:#059669;' : ''}">${editingTask ? 'Save Changes' : 'Set Deadline & Publish'}</button>
+                                            <button type="submit" class="submit-btn" style="${editingTask ? 'background:#059669;' : ''}">${editingTask ? 'Save Changes' : 'Set Deadline & Publish 3 Categories'}</button>
                                         </form>
                                     </div>
                                 ` : ''}
 
-                                <!-- Tasks List & Workflows -->
+                                <!-- Master Deadlines & Categories List -->
                                 <div class="panel">
-                                    <h2>Active Team Tasks & Deadlines</h2>
-                                    <div style="display:flex; flex-direction:column; gap:12px;">
+                                    <h2>Active Deadlines & 3 Task Categories</h2>
+                                    <div style="display:flex; flex-direction:column; gap:16px;">
                                         ${state.tasks.length === 0 ? `<p style="color:#6b7280; font-size:11px;">No deadlines set yet.</p>` : ''}
-                                        ${state.tasks.map(t => {
-                                            const isAssignedToMe = t.assignee === state.currentUser.username;
-                                            const isUnassigned = t.assignee === 'Unassigned';
-                                            const isMakeCaption = t.taskType === 'Make Caption';
-                                            const isEditCaption = t.taskType === 'Edit caption';
-                                            const isMakePubmat = t.taskType === 'Make Pubmat';
-
-                                            const canAssign = (isChiefCaptionWriter && isMakeCaption) || 
-                                                              (isChiefPubMatArtist && isMakePubmat) || 
-                                                              (isChiefTextFormatter && isEditCaption);
-
-                                            let reviewBadge = '';
-                                            if (t.reviewStatus === 'SMM Approved') {
-                                                reviewBadge = `<span class="badge-status-approved">SMM Approved</span>`;
-                                            } else if (t.reviewStatus === 'Chief Approved') {
-                                                reviewBadge = `<span class="badge-status-smm">Chief Approved (Pending SMM)</span>`;
-                                            } else if (t.reviewStatus === 'Needs Revision') {
-                                                reviewBadge = `<span class="badge-status-revision">Needs Revision</span>`;
-                                            } else if (t.reviewStatus === 'Pending Review') {
-                                                reviewBadge = `<span style="background:#1f2937; color:#9ca3af; padding:2px 6px; border-radius:99px; font-size:9px;">Pending Review</span>`;
-                                            } else {
-                                                reviewBadge = `<span class="badge-amber">Needs Assignment</span>`;
-                                            }
-
-                                            return `
-                                                <div style="background:#030712; border:1px solid #1f2937; padding:12px; border-radius:8px; display:flex; flex-direction:column; gap:8px;">
-                                                    <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap;">
-                                                        <div style="flex: 1; min-width: 180px;">
-                                                            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px; flex-wrap:wrap;">
-                                                                <span style="font-weight:600; font-size:13px;">${t.title}</span>
-                                                                <span class="badge-type">${t.taskType || 'Task'}</span>
-                                                                ${reviewBadge}
-                                                                ${getReminderBadge(t.deadline)}
-                                                            </div>
-                                                            ${t.instructions ? `<div style="font-size:11px; color:#d1d5db; background:#111827; padding:6px; border-radius:6px; margin-bottom:4px; border-left:2px solid #3b82f6;"><b>Instructions:</b> ${t.instructions}</div>` : ''}
-                                                            ${t.revisionNotes ? `<div style="font-size:11px; color:#fb923c; background:#451a03; padding:6px; border-radius:6px; margin-bottom:4px; border-left:2px solid #f97316;"><b>Revision Requested:</b> ${t.revisionNotes}</div>` : ''}
-                                                            <span style="font-size:10px; color:#9ca3af;">Assigned to: <b style="color:#60a5fa">${t.assignee}</b> &bull; Due: ${new Date(t.deadline).toLocaleString()}</span>
+                                        ${state.tasks.map(t => `
+                                            <div style="background:#030712; border:1px solid #1f2937; padding:14px; border-radius:10px; display:flex; flex-direction:column; gap:12px;">
+                                                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; flex-wrap:wrap; border-bottom:1px solid #1f2937; padding-bottom:10px;">
+                                                    <div>
+                                                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px; flex-wrap:wrap;">
+                                                            <span style="font-weight:bold; font-size:14px; color:#60a5fa;">${t.title}</span>
+                                                            ${getReminderBadge(t.deadline)}
                                                         </div>
-                                                        <div style="display:flex; align-items:center; gap:6px;">
-                                                            <select onchange="updateTaskStatus(${t.id}, this.value)" style="width:auto; padding:5px; font-size:11px;">
-                                                                <option value="Pending" ${t.status === 'Pending' ? 'selected' : ''}>Pending</option>
-                                                                <option value="In Progress" ${t.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
-                                                                <option value="Completed" ${t.status === 'Completed' ? 'selected' : ''}>Completed</option>
-                                                            </select>
-                                                            ${isSMM ? `
-                                                                <button onclick="startEditTask(${t.id})" class="action-btn">Edit</button>
-                                                                <button onclick="deleteTask(${t.id})" class="action-btn del">Delete</button>
-                                                            ` : ''}
-                                                        </div>
+                                                        ${t.instructions ? `<div style="font-size:11px; color:#d1d5db; margin-bottom:4px;"><b>Instructions:</b> ${t.instructions}</div>` : ''}
+                                                        <span style="font-size:10px; color:#9ca3af;">Due: ${new Date(t.deadline).toLocaleString()}</span>
                                                     </div>
-
-                                                    <!-- Chief Assignment Section -->
-                                                    ${isUnassigned && canAssign ? `
-                                                        <div style="background:#111827; border:1px solid #1f2937; padding:8px; border-radius:6px; margin-top:4px; display:flex; gap:6px; align-items:center;">
-                                                            <select id="assignee-select-${t.id}" style="font-size:11px;">
-                                                                ${state.users.map(u => `<option value="${u.username}">${u.username} (${(u.roles || []).join(', ')})</option>`).join('')}
-                                                            </select>
-                                                            <button onclick="assignTaskMember(${t.id})" class="action-btn" style="background:#2563eb; color:#fff; padding:6px 12px; white-space:nowrap;">Assign Member / Self</button>
-                                                        </div>
-                                                    ` : ''}
-
-                                                    <!-- Submission Area for Assigned User -->
-                                                    ${isAssignedToMe && !isUnassigned ? `
-                                                        <div style="background:#111827; border:1px solid #1f2937; padding:8px; border-radius:6px; margin-top:4px;">
-                                                            <label style="margin-bottom:4px; color:#60a5fa;">Your Submission:</label>
-                                                            ${isMakePubmat && isPubMatArtist ? `
-                                                                <div style="font-size:11px; color:#d1d5db; margin-bottom:6px;">
-                                                                    As a PubMat Artist, please open the <a href="https://drive.google.com/drive/folders/1LUc27TF7zExN6MyLOVJw8ZSG_Q4b7Gwu" target="_blank" style="color:#60a5fa; text-decoration:underline;">Google Drive Folder</a> to upload your photo, then paste your submission notes below:
-                                                                </div>
-                                                            ` : ''}
-                                                            <textarea id="sub-text-${t.id}" rows="2" placeholder="Type your text submission or link here..." style="margin-bottom:6px;">${t.submission || ''}</textarea>
-                                                            <button onclick="submitTaskWork(${t.id})" class="action-btn" style="background:#2563eb; color:#fff; padding:6px 12px;">Submit Work for Review</button>
-                                                        </div>
-                                                    ` : t.submission ? `
-                                                        <div style="font-size:10px; color:#9ca3af; background:#111827; padding:6px; border-radius:4px;">
-                                                            <b>Submission by ${t.assignee}:</b> ${t.submission}
-                                                        </div>
-                                                    ` : ''}
-
-                                                    <!-- Chief Review Controls -->
-                                                    ${((isMakeCaption && isChiefCaptionWriter) || (isMakePubmat && isChiefPubMatArtist) || (isEditCaption && isChiefTextFormatter)) && t.submission && t.reviewStatus === 'Pending Review' ? `
-                                                        <div style="background:#1e1b4b; border:1px solid #312e81; padding:8px; border-radius:6px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                                                            <span style="font-size:11px; color:#c7d2fe;"><b>Chief Review:</b> Check submission and approve or ask for revision.</span>
-                                                            <div style="display:flex; gap:6px;">
-                                                                <button onclick="reviewTask(${t.id}, 'approve')" class="action-btn approve">Approve & Send to SMM</button>
-                                                                <button onclick="reviewTask(${t.id}, 'revision')" class="action-btn revision">Ask Revision</button>
-                                                            </div>
-                                                        </div>
-                                                    ` : ''}
-
-                                                    <!-- SMM Final Review Controls -->
-                                                    ${isSMM && t.submission && t.reviewStatus === 'Chief Approved' ? `
-                                                        <div style="background:#172554; border:1px solid #1e40af; padding:8px; border-radius:6px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                                                            <span style="font-size:11px; color:#93c5fd;"><b>SMM Final Review:</b> Give final approval or request revisions.</span>
-                                                            <div style="display:flex; gap:6px;">
-                                                                <button onclick="reviewTask(${t.id}, 'approve')" class="action-btn approve">Final Approve</button>
-                                                                <button onclick="reviewTask(${t.id}, 'revision')" class="action-btn revision">Ask Revision</button>
-                                                            </div>
+                                                    ${isSMM ? `
+                                                        <div style="display:flex; gap:6px;">
+                                                            <button onclick="startEditTask(${t.id})" class="action-btn">Edit</button>
+                                                            <button onclick="deleteTask(${t.id})" class="action-btn del">Delete</button>
                                                         </div>
                                                     ` : ''}
                                                 </div>
-                                            `;
-                                        }).join('')}
+
+                                                <!-- 3 Categories Sub-tasks -->
+                                                <div style="display:flex; flex-direction:column; gap:8px;">
+                                                    ${t.subtasks.map(st => {
+                                                        const isUnassigned = st.assignee === 'Unassigned';
+                                                        const isAssignedToMe = st.assignee === state.currentUser.username;
+                                                        const isMakeCaption = st.taskType === 'Make Caption';
+                                                        const isEditCaption = st.taskType === 'Edit caption';
+                                                        const isMakePubmat = st.taskType === 'Make Pubmat';
+
+                                                        const canAssign = (isChiefCaptionWriter && isMakeCaption) || 
+                                                                          (isChiefPubMatArtist && isMakePubmat) || 
+                                                                          (isChiefTextFormatter && isEditCaption);
+
+                                                        let reviewBadge = '';
+                                                        if (st.reviewStatus === 'SMM Approved') {
+                                                            reviewBadge = `<span class="badge-status-approved">SMM Approved</span>`;
+                                                        } else if (st.reviewStatus === 'Chief Approved') {
+                                                            reviewBadge = `<span class="badge-status-smm">Chief Approved (Pending SMM)</span>`;
+                                                        } else if (st.reviewStatus === 'Needs Revision') {
+                                                            reviewBadge = `<span class="badge-status-revision">Needs Revision</span>`;
+                                                        } else if (st.reviewStatus === 'Pending Review') {
+                                                            reviewBadge = `<span style="background:#1f2937; color:#9ca3af; padding:2px 6px; border-radius:99px; font-size:9px;">Pending Review</span>`;
+                                                        } else {
+                                                            reviewBadge = `<span class="badge-amber">Needs Assignment</span>`;
+                                                        }
+
+                                                        return `
+                                                            <div style="background:#111827; border:1px solid #1f2937; padding:10px; border-radius:8px; display:flex; flex-direction:column; gap:6px;">
+                                                                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+                                                                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                                                                        <span class="badge-type">${st.taskType}</span>
+                                                                        ${reviewBadge}
+                                                                        <span style="font-size:11px; color:#9ca3af;">Assigned: <b style="color:#60a5fa">${st.assignee}</b></span>
+                                                                    </div>
+                                                                    <select onchange="updateSubtaskStatus(${t.id}, ${st.id}, this.value)" style="width:auto; padding:4px; font-size:10px;">
+                                                                        <option value="Pending" ${st.status === 'Pending' ? 'selected' : ''}>Pending</option>
+                                                                        <option value="In Progress" ${st.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                                                                        <option value="Completed" ${st.status === 'Completed' ? 'selected' : ''}>Completed</option>
+                                                                    </select>
+                                                                </div>
+
+                                                                <!-- Chief Assignment Section -->
+                                                                ${isUnassigned && canAssign ? `
+                                                                    <div style="background:#030712; border:1px solid #1f2937; padding:8px; border-radius:6px; display:flex; gap:6px; align-items:center;">
+                                                                        <select id="assignee-select-${st.id}" style="font-size:11px;">
+                                                                            ${state.users.map(u => `<option value="${u.username}">${u.username} (${(u.roles || []).join(', ')})</option>`).join('')}
+                                                                        </select>
+                                                                        <button onclick="assignSubtask(${t.id}, ${st.id})" class="action-btn" style="background:#2563eb; color:#fff; padding:6px 12px; white-space:nowrap;">Assign Member / Self</button>
+                                                                    </div>
+                                                                ` : ''}
+
+                                                                <!-- Submission Area for Assigned User -->
+                                                                ${isAssignedToMe && !isUnassigned ? `
+                                                                    <div style="background:#030712; border:1px solid #1f2937; padding:8px; border-radius:6px;">
+                                                                        <label style="margin-bottom:4px; color:#60a5fa;">Your Submission:</label>
+                                                                        ${isMakePubmat && isPubMatArtist ? `
+                                                                            <div style="font-size:11px; color:#d1d5db; margin-bottom:6px;">
+                                                                                As a PubMat Artist, please open the <a href="https://drive.google.com/drive/folders/1LUc27TF7zExN6MyLOVJw8ZSG_Q4b7Gwu" target="_blank" style="color:#60a5fa; text-decoration:underline;">Google Drive Folder</a> to upload your photo, then paste your submission notes below:
+                                                                            </div>
+                                                                        ` : ''}
+                                                                        <textarea id="sub-text-${st.id}" rows="2" placeholder="Type your text submission or link here..." style="margin-bottom:6px;">${st.submission || ''}</textarea>
+                                                                        <button onclick="submitSubtaskWork(${t.id}, ${st.id})" class="action-btn" style="background:#2563eb; color:#fff; padding:6px 12px;">Submit Work for Review</button>
+                                                                    </div>
+                                                                ` : st.submission ? `
+                                                                    <div style="font-size:10px; color:#9ca3af; background:#030712; padding:6px; border-radius:4px;">
+                                                                        <b>Submission by ${st.assignee}:</b> ${st.submission}
+                                                                    </div>
+                                                                ` : ''}
+
+                                                                <!-- Chief Review Controls -->
+                                                                ${((isMakeCaption && isChiefCaptionWriter) || (isMakePubmat && isChiefPubMatArtist) || (isEditCaption && isChiefTextFormatter)) && st.submission && st.reviewStatus === 'Pending Review' ? `
+                                                                    <div style="background:#1e1b4b; border:1px solid #312e81; padding:8px; border-radius:6px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                                                                        <span style="font-size:11px; color:#c7d2fe;"><b>Chief Review:</b> Check submission and approve or ask for revision.</span>
+                                                                        <div style="display:flex; gap:6px;">
+                                                                            <button onclick="reviewSubtask(${t.id}, ${st.id}, 'approve')" class="action-btn approve">Approve & Send to SMM</button>
+                                                                            <button onclick="reviewSubtask(${t.id}, ${st.id}, 'revision')" class="action-btn revision">Ask Revision</button>
+                                                                        </div>
+                                                                    </div>
+                                                                ` : ''}
+
+                                                                <!-- SMM Final Review Controls -->
+                                                                ${isSMM && st.submission && st.reviewStatus === 'Chief Approved' ? `
+                                                                    <div style="background:#172554; border:1px solid #1e40af; padding:8px; border-radius:6px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                                                                        <span style="font-size:11px; color:#93c5fd;"><b>SMM Final Review:</b> Give final approval or request revisions.</span>
+                                                                        <div style="display:flex; gap:6px;">
+                                                                            <button onclick="reviewSubtask(${t.id}, ${st.id}, 'approve')" class="action-btn approve">Final Approve</button>
+                                                                            <button onclick="reviewSubtask(${t.id}, ${st.id}, 'revision')" class="action-btn revision">Ask Revision</button>
+                                                                        </div>
+                                                                    </div>
+                                                                ` : ''}
+                                                            </div>
+                                                        `;
+                                                    }).join('')}
+                                                </div>
+                                            </div>
+                                        `).join('')}
                                     </div>
                                 </div>
 
